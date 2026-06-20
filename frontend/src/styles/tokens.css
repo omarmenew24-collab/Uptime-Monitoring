@@ -1,0 +1,58 @@
+:root {
+  /* Backgrounds */
+  --bg-base:           #09090b;
+  --bg-surface:        #18181b;
+  --bg-surface-raised: #27272a;
+
+  /* Borders */
+  --border-default:    #3f3f46;
+  --border-subtle:     #27272a;
+
+  /* Text */
+  --text-primary:      #fafafa;
+  --text-muted:        #a1a1aa;
+  --text-disabled:     #52525b;
+
+  /* Accent */
+  --accent:            #6366f1;
+  --accent-hover:      #818cf8;
+
+  /* Status */
+  --status-up:         #22c55e;
+  --status-down:       #ef4444;
+  --status-degraded:   #f59e0b;
+  --status-paused:     #71717a;
+
+  /* Status backgrounds */
+  --status-up-bg:      #052e16;
+  --status-down-bg:    #2d0a0a;
+  --status-degraded-bg:#2d1b00;
+  --status-paused-bg:  #1c1c1e;
+
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Type scale */
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+
+  /* Spacing */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
