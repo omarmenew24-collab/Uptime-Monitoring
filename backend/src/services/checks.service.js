@@ -1,11 +1,12 @@
+import pLimit from 'p-limit';
 import { withTransaction } from '../config/db.js';
 import { findDueMonitors, insertCheckLog, updateMonitorAfterCheck } from '../db/checks.queries.js';
 import { resolveAndValidate } from '../utils/url-safety.js';
 
 const CHECK_TIMEOUT_MS = 5000;
+const MAX_CONCURRENT_CHECKS = 50;
 
 export const runCheck = async (url) => {
-  // SSRF protection: resolve hostname and block private/reserved IPs before fetching
   const dnsCheck = await resolveAndValidate(url);
   if (!dnsCheck.safe) {
     return {
@@ -26,6 +27,8 @@ export const runCheck = async (url) => {
     });
 
     const responseTimeMs = Date.now() - startTime;
+
+    await response.body?.cancel();
 
     if (response.ok) {
       return {
@@ -96,8 +99,10 @@ export const checkAllDueMonitors = async () => {
 
   if (dueMonitors.length === 0) return;
 
+  const limit = pLimit(MAX_CONCURRENT_CHECKS);
+
   const results = await Promise.allSettled(
-    dueMonitors.map((monitor) => processCheck(monitor))
+    dueMonitors.map((monitor) => limit(() => processCheck(monitor)))
   );
 
   const failed = results.filter((r) => r.status === 'rejected');

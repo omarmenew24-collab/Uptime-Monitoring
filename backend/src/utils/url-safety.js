@@ -1,40 +1,27 @@
 import { lookup } from 'dns/promises';
+import ipaddr from 'ipaddr.js';
 
 const BLOCKED_HOSTNAMES = new Set([
   'localhost',
   'metadata.google.internal',
 ]);
 
-const isPrivateIPv4 = (ip) => {
-  const parts = ip.split('.').map(Number);
-  if (parts.length !== 4) return false;
-
-  // 10.0.0.0/8
-  if (parts[0] === 10) return true;
-  // 172.16.0.0/12
-  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-  // 192.168.0.0/16
-  if (parts[0] === 192 && parts[1] === 168) return true;
-  // 127.0.0.0/8 (loopback)
-  if (parts[0] === 127) return true;
-  // 169.254.0.0/16 (link-local, AWS/cloud metadata)
-  if (parts[0] === 169 && parts[1] === 254) return true;
-  // 0.0.0.0
-  if (parts.every((p) => p === 0)) return true;
-
-  return false;
-};
-
-const isPrivateIPv6 = (ip) => {
-  const normalized = ip.toLowerCase();
-  if (normalized === '::1') return true;
-  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
-  if (normalized.startsWith('fe80')) return true;
-  return false;
-};
+const PRIVATE_RANGES = [
+  'loopback',
+  'private',
+  'linkLocal',
+  'uniqueLocal',
+  'unspecified',
+];
 
 export const isPrivateIP = (ip) => {
-  return isPrivateIPv4(ip) || isPrivateIPv6(ip);
+  try {
+    const parsed = ipaddr.process(ip);
+    const range = parsed.range();
+    return PRIVATE_RANGES.includes(range);
+  } catch {
+    return true;
+  }
 };
 
 export const validateUrlHostname = (urlString) => {
@@ -55,9 +42,13 @@ export const validateUrlHostname = (urlString) => {
     return { safe: false, reason: 'This hostname is not allowed' };
   }
 
-  // Block raw IP addresses at input time
-  if (isPrivateIPv4(hostname) || isPrivateIPv6(hostname)) {
-    return { safe: false, reason: 'Private or reserved IP addresses are not allowed' };
+  try {
+    const addr = ipaddr.process(hostname);
+    if (PRIVATE_RANGES.includes(addr.range())) {
+      return { safe: false, reason: 'Private or reserved IP addresses are not allowed' };
+    }
+  } catch {
+    // not an IP literal — hostname will be checked at fetch time via DNS
   }
 
   return { safe: true };
@@ -67,12 +58,14 @@ export const resolveAndValidate = async (urlString) => {
   const parsed = new URL(urlString);
   const hostname = parsed.hostname;
 
-  // If hostname is already an IP, check it directly
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-    if (isPrivateIPv4(hostname)) {
+  try {
+    const addr = ipaddr.process(hostname);
+    if (PRIVATE_RANGES.includes(addr.range())) {
       return { safe: false, reason: 'Private or reserved IP addresses are not allowed' };
     }
     return { safe: true, ip: hostname };
+  } catch {
+    // not an IP literal — resolve via DNS
   }
 
   try {
