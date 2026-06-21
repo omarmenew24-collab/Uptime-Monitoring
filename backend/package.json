@@ -13,6 +13,9 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "dependencies": {
     "@clerk/express": "^2.1.28",
     "cors": "^2.8.6",
