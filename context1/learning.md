@@ -211,3 +211,68 @@ export const isPrivateIP = (ip) => {
 `catch → return true` means if the IP is malformed or unparseable, we block it. In security, unknown = denied.
 
 The lesson: **don't hand-roll security-critical parsing.** A well-tested library that tracks RFCs will always be more correct than your regex.
+
+---
+
+## 5. DNS Rebinding / TOCTOU (Time of Check, Time of Use)
+
+### The bad code
+
+```js
+// url-safety.js
+export const resolveAndValidate = async (urlString) => {
+  const { address } = await lookup(hostname);  // resolve once
+  if (isPrivateIP(address)) {
+    return { safe: false, reason: '...' };
+  }
+  return { safe: true, ip: address };           // return the IP
+};
+
+// checks.service.js
+const dnsCheck = await resolveAndValidate(url);
+if (!dnsCheck.safe) return ...;
+
+const response = await fetch(url, { ... });     // resolves hostname AGAIN
+```
+
+### What's wrong
+
+Two separate DNS resolutions happen:
+1. `resolveAndValidate` calls `dns.lookup()` → gets `93.184.216.34` (public, safe) ✓
+2. `fetch(url)` calls `dns.lookup()` internally → gets `169.254.169.254` (private, metadata) ✗
+
+Between step 1 and step 2, the DNS server changed its answer. This is called **DNS rebinding** — the attacker's DNS server is programmed to alternate: first response is a safe public IP, second response is a private/internal IP.
+
+The gap between the two lookups is only milliseconds, but that's enough. An attacker sets a very short DNS TTL (like 0 seconds), so the OS doesn't cache the result, and each lookup hits the attacker's server fresh.
+
+There's also a second bug: `dns.lookup()` returns only the **first** resolved IP by default. A hostname can have multiple A records — `93.184.216.34` (public) AND `10.0.0.5` (private). If the first one happens to be public, the check passes, but `fetch()` might connect to the private one.
+
+### The fix
+
+```js
+export const resolveAndValidate = async (urlString) => {
+  // Resolve ALL addresses — block if ANY is private
+  let addresses;
+  try {
+    addresses = await dns.lookup(hostname, { all: true });
+  } catch {
+    return { safe: false, reason: `DNS resolution failed for ${hostname}` };
+  }
+
+  for (const { address } of addresses) {
+    if (isPrivateIP(address)) {
+      return { safe: false, reason: `Hostname resolves to a private IP (${address})` };
+    }
+  }
+
+  return { safe: true };
+};
+```
+
+Two changes:
+1. **`{ all: true }`** — resolves every A/AAAA record for the hostname, not just the first. If any record points to a private IP, the whole check is blocked. Closes the multi-record bypass.
+2. **The TOCTOU gap is accepted as a known limitation** — true IP pinning (replacing the hostname with the resolved IP in the URL) breaks HTTPS because TLS certificates are issued for the hostname, not the IP. The server's SNI check fails. The only bulletproof fix requires a custom HTTP agent that pins the socket to the resolved IP at the connection level — that's deep `undici` internals and over-engineered for this project.
+
+What we get: protection against multi-record attacks (complete) and a very narrow TOCTOU window that requires an attacker to control a DNS server with TTL=0 and respond differently within milliseconds. For a monitoring MVP, this is an acceptable tradeoff. For a security-critical enterprise product, you'd use a custom agent with IP pinning.
+
+The lesson: **security often involves tradeoffs, not absolutes.** Know what you're protected against, know what gap remains, and document the decision so the next developer doesn't think it's an oversight.
