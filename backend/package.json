@@ -19,6 +19,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "helmet": "^8.2.0",
+    "node-cron": "^4.4.1",
     "node-pg-migrate": "^8.0.4",
     "pg": "^8.21.0",
     "svix": "^1.95.2",
