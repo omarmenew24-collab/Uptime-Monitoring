@@ -1,9 +1,21 @@
 import { withTransaction } from '../config/db.js';
 import { findDueMonitors, insertCheckLog, updateMonitorAfterCheck } from '../db/checks.queries.js';
+import { resolveAndValidate } from '../utils/url-safety.js';
 
 const CHECK_TIMEOUT_MS = 5000;
 
 export const runCheck = async (url) => {
+  // SSRF protection: resolve hostname and block private/reserved IPs before fetching
+  const dnsCheck = await resolveAndValidate(url);
+  if (!dnsCheck.safe) {
+    return {
+      status: 'down',
+      responseCode: null,
+      responseTimeMs: null,
+      message: `Blocked: ${dnsCheck.reason}`,
+    };
+  }
+
   const startTime = Date.now();
 
   try {
