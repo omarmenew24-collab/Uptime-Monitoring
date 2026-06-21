@@ -1,10 +1,16 @@
 import { z } from 'zod';
+import { validateUrlHostname } from '../utils/url-safety.js';
 
 const urlPattern = /^https?:\/\/.+\..+/;
 
 export const createMonitorSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
-  url: z.string().trim().regex(urlPattern, 'Must be a valid HTTP or HTTPS URL with a domain'),
+  url: z.string().trim()
+    .regex(urlPattern, 'Must be a valid HTTP or HTTPS URL with a domain')
+    .refine((val) => {
+      const result = validateUrlHostname(val);
+      return result.safe;
+    }, 'Private, reserved, or internal URLs are not allowed'),
   interval_minutes: z.number().refine(
     (val) => [1, 5, 10, 30, 60].includes(val),
     'Must be 1, 5, 10, 30, or 60'
