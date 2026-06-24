@@ -43,5 +43,6 @@ export const schema = {
     response_time_ms: 'integer       nullable',
     message:          'text          nullable',
     checked_at:       'timestamptz   NOT NULL  default now()',
+    job_id:           'varchar       nullable  UNIQUE  (BullMQ job id — idempotency key)',
   },
 };

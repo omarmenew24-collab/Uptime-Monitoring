@@ -181,7 +181,7 @@ export const dispatchDueChecks = async () => {
         consecutiveFailures: monitor.consecutive_failures,
         isAlerted: monitor.is_alerted,
       },
-      opts: { jobId: `${monitor.id}:${minuteBucket}` },
+      opts: { jobId: `${monitor.id}_${minuteBucket}` },
     }))
   );
 
@@ -189,10 +189,14 @@ export const dispatchDueChecks = async () => {
 };
 ```
 
-The `jobId` (`monitorId:minuteBucket`) makes **enqueue idempotent**: if two
+The `jobId` (`monitorId_minuteBucket`) makes **enqueue idempotent**: if two
 dispatcher ticks race in the same minute, BullMQ ignores the duplicate add. The
 monitor state snapshot rides in `data` — the worker uses it directly, so the
 worker never re-queries the monitor.
+
+> BullMQ rejects a custom `jobId` containing `:` (`Custom Id cannot contain :`),
+> so the separator is `_`, not `:`. The monitor id is a UUID (hyphens only), so
+> `_` keeps the two parts unambiguous.
 
 ### 4. `src/queue/checkWorker.js` — the consumer
 
@@ -421,14 +425,21 @@ Run the system with two processes: `npm run dev` (API) and `npm run worker:dev`.
   before ack): `runCheck` may run again, but the write is deduped by `job_id` —
   one job produces exactly one `check_logs` row and one state transition. ✓
 - **Different jobs for the same monitor in the same interval:** prevented by the
-  dispatcher `jobId` (`monitorId:minuteBucket`) and by advancing `next_check_at`
+  dispatcher `jobId` (`monitorId_minuteBucket`) and by advancing `next_check_at`
   at claim time. ✓
-- **Accepted limitation:** the monitor state in the job payload is a *snapshot*
-  from claim time. Under normal spacing (interval ≥ 1 min, 5 s check timeout) a
-  monitor has at most one in-flight job, so the snapshot is correct. A future
-  hardening (a `SELECT … FOR UPDATE` re-read of the monitor inside the worker
-  transaction) would close the window if intervals ever drop below check
-  duration — out of scope here, documented so it isn't mistaken for an oversight.
+- **Accepted limitation — payload snapshot:** the monitor state in the job
+  payload is a *snapshot* from claim time. Under normal spacing (interval ≥ 1 min,
+  5 s check timeout) a monitor has at most one in-flight job, so the snapshot is
+  correct. A future hardening (a `SELECT … FOR UPDATE` re-read of the monitor
+  inside the worker transaction) would close the window if intervals ever drop
+  below check duration — out of scope here, documented so it isn't mistaken for
+  an oversight.
+- **Accepted limitation — claim/enqueue not atomic:** `claimDueMonitors` commits
+  (advancing `next_check_at`) before `checkQueue.addBulk` runs. If the enqueue
+  fails (e.g. Redis blips) after the claim commits, that monitor is simply not
+  checked this cycle and is picked up again once `next_check_at` passes — delayed
+  by one interval, never lost. Wrapping claim+enqueue in an outbox is the durable
+  fix; unjustified at this scale, so it is deliberately deferred.
 
 ---
 
