@@ -276,3 +276,74 @@ Two changes:
 What we get: protection against multi-record attacks (complete) and a very narrow TOCTOU window that requires an attacker to control a DNS server with TTL=0 and respond differently within milliseconds. For a monitoring MVP, this is an acceptable tradeoff. For a security-critical enterprise product, you'd use a custom agent with IP pinning.
 
 The lesson: **security often involves tradeoffs, not absolutes.** Know what you're protected against, know what gap remains, and document the decision so the next developer doesn't think it's an oversight.
+
+---
+
+## 6. Phase 1 — From an In-Process Cron to a Durable Queue
+
+This one isn't a single bug — it's the architecture change in `system-design-roadmap.md` Phase 1, written up as a before→after so the *why* is on record. Spec: `feature-specs/09-queue-worker.md`.
+
+### The "before" (Phase 0)
+
+One `node-cron` tick **inside the API process** both decided what was due and ran the checks, guarded by an in-memory boolean:
+
+```js
+let isRunning = false;
+cron.schedule('* * * * *', async () => {
+  if (isRunning) return;        // skip if the last run is still going
+  isRunning = true;
+  try { await checkAllDueMonitors(); }   // find due + pLimit(50) fan-out, all here
+  finally { isRunning = false; }
+});
+```
+
+### What breaks
+
+- **Run a second instance** (scale out, or a rolling deploy where old + new overlap): both ticks fire, and `isRunning` is *per-process* — it knows nothing about the other copy. **Every monitor gets checked twice.**
+- **Crash mid-check**: a check that was in flight when the process died just vanishes. There's no record it was claimed, no retry with backoff, no dead-letter.
+- **Capacity is capped at one process.** `pLimit(50)` is 50 in *that* process; you can't add a machine to go faster, because adding a process re-triggers the double-check problem above.
+
+The root issue: an in-memory flag can only coordinate work *within one process*, and the schedule column alone can't make work durable.
+
+### The fix
+
+Split **decide** from **execute**, and put a durable queue between them.
+
+1. **Work-claiming replaces the flag.** The dispatcher claims due monitors in the database, the source of truth every process shares:
+
+   ```sql
+   SELECT id FROM monitors
+   WHERE next_check_at <= NOW() AND is_active AND NOT is_deleted
+   FOR UPDATE SKIP LOCKED          -- each row locked & skipped by other claimers
+   LIMIT $1
+   ```
+
+   `SKIP LOCKED` lets N dispatchers split the work; each monitor is claimed by exactly one. The same statement advances `next_check_at`, so a claimed monitor isn't re-selected next tick.
+
+2. **A durable queue (BullMQ/Redis) owns execution and retry.** The unit of work is now a job. If a worker dies mid-check, BullMQ re-delivers the job; transient failures retry with exponential backoff; persistent ones land in the failed set (dead-letter). This is *why* it's safe to advance `next_check_at` up front — retry is the queue's job now, not a side effect of leaving the schedule in the past.
+
+3. **Idempotency, because a durable queue is at-least-once.** A job can be delivered twice (stall re-delivery, retry). The write is deduped on a `job_id` unique key:
+
+   ```js
+   // ON CONFLICT (job_id) DO NOTHING → returns null on a repeat delivery
+   const inserted = await insertCheckLog(client, monitorId, checkResult, jobId);
+   if (!inserted) return;   // already processed — skip the state update
+   ```
+
+   One job ⇒ exactly one log row and one state transition.
+
+4. **Concurrency is the worker's, scaled by adding workers.** `pLimit(50)` became `new Worker(..., { concurrency })`. To go faster: raise `WORKER_CONCURRENCY` or run another `npm run worker` — same code.
+
+5. **Graceful shutdown.** `worker.close()` stops pulling new jobs but lets in-flight checks finish before exit, so a deploy drains instead of severing work.
+
+### Two things building it actually taught us
+
+- **BullMQ forbids `:` in a custom job id** (`Custom Id cannot contain :`). The first `jobId` was `monitorId:minuteBucket`; it threw at enqueue. Changed the separator to `_`. Only caught by *running* it — a reminder that static checks and "it imports fine" aren't verification.
+- **Claim and enqueue aren't atomic.** `claimDueMonitors` commits (advancing `next_check_at`) before `addBulk` runs. When the enqueue failed, the monitor had already been claimed — so it simply waited one interval before becoming due again. Delayed, never lost. Documented as an accepted limitation rather than papered over; the durable fix (a transactional outbox) is unjustified at this scale.
+
+### Lessons worth keeping
+
+1. **An in-memory flag coordinates one process; a shared lock coordinates many.** The moment "prevent overlapping runs" has to hold across processes, the answer moves into the database (`SKIP LOCKED`) or a queue — not a boolean.
+2. **Durable delivery is at-least-once, so consumers must be idempotent.** The instant you add a queue, design the dedupe key (`job_id`) in the same step — it is not optional polish.
+3. **Decide *what* to run separately from *how* to run it.** That seam is what lets execution scale by adding workers with zero code change.
+4. **You haven't verified a distributed change until you've run it.** The real bug here was invisible to syntax checks and import wiring — it only appeared on the first live enqueue.
