@@ -59,6 +59,31 @@ export const useCreateMonitor = () => {
   return { createMyMonitor, isPending, isError, isSuccess };
 };
 
+export const useEditMonitor = () => {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { mutateAsync: editMonitor, isPending } = useMutation({
+    mutationFn: async ({ monitorId, data }) => {
+      const token = await getToken();
+      const res = await api.patch(ENDPOINTS.MONITOR_EDIT(monitorId), data, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.data;
+    },
+    onSuccess: (_, { monitorId }) => {
+      toast.success('Monitor updated');
+      queryClient.invalidateQueries({ queryKey: ['monitors'] });
+      queryClient.invalidateQueries({ queryKey: ['monitor', monitorId] });
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.error || 'Failed to update monitor');
+    },
+  });
+
+  return { editMonitor, isPending };
+};
+
 export const usePauseMonitor = () => {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();

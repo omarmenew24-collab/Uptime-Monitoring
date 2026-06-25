@@ -20,3 +20,8 @@ export const createMonitorSchema = z.object({
     'Must be 1, 2, 3, or 5'
   ).default(2),
 });
+
+export const updateMonitorSchema = createMonitorSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  'At least one field must be provided'
+);
