@@ -22,6 +22,7 @@ export const useGetMonitors = () => {
   } = useQuery({
     queryKey: ['monitors'],
     queryFn: fetchMonitors,
+    refetchInterval: 10_000,
   });
 
   return { monitors: data?.data ?? [], isLoading, isError };

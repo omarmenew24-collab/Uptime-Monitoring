@@ -1,3 +1,4 @@
+import { Globe, Clock, Timer, AlertTriangle } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import StatusBadge from './StatusBadge';
@@ -7,6 +8,13 @@ const borderColors = {
   down: 'border-l-red-500',
   timeout: 'border-l-amber-500',
   paused: 'border-l-zinc-500',
+};
+
+const dotColors = {
+  up: 'bg-emerald-500',
+  down: 'bg-red-500',
+  timeout: 'bg-amber-500',
+  paused: 'bg-zinc-500',
 };
 
 function timeAgo(dateString) {
@@ -27,20 +35,54 @@ export default function MonitorCard({ monitor }) {
   return (
     <Card
       className={cn(
-        'flex items-center justify-between p-6 border-l-[3px]',
+        'group relative border-l-[3px] p-5 transition-colors hover:bg-zinc-900/50',
         borderColors[variant]
       )}
     >
-      <div className="flex items-center gap-4">
-        <StatusBadge status={monitor.last_status} isActive={monitor.is_active} />
-        <div className="flex flex-col gap-0.5">
-          <span className="text-base font-medium text-foreground">{monitor.name}</span>
-          <span className="font-mono text-sm text-muted-foreground">{monitor.url}</span>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3.5 min-w-0">
+          <div className="mt-1 relative">
+            <div className={cn(
+              'h-2.5 w-2.5 rounded-full',
+              dotColors[variant]
+            )} />
+            {variant === 'up' && (
+              <div className={cn(
+                'absolute inset-0 h-2.5 w-2.5 rounded-full animate-ping opacity-30',
+                dotColors[variant]
+              )} />
+            )}
+          </div>
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[15px] font-medium text-zinc-100 truncate">
+                {monitor.name}
+              </span>
+              <StatusBadge status={monitor.last_status} isActive={monitor.is_active} />
+            </div>
+            <div className="flex items-center gap-1.5 text-zinc-500">
+              <Globe size={13} strokeWidth={1.5} />
+              <span className="font-mono text-[13px] truncate">{monitor.url}</span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="flex flex-col items-end gap-0.5">
-        <span className="text-sm text-muted-foreground">Last checked: {timeAgo(monitor.last_checked_at)}</span>
-        <span className="font-mono text-sm text-muted-foreground">{monitor.interval_minutes}min interval</span>
+
+        <div className="flex items-center gap-4 shrink-0 text-[13px] text-zinc-500">
+          <div className="flex items-center gap-1.5">
+            <Clock size={13} strokeWidth={1.5} />
+            <span>{timeAgo(monitor.last_checked_at)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Timer size={13} strokeWidth={1.5} />
+            <span className="font-mono">{monitor.interval_minutes}m</span>
+          </div>
+          {monitor.is_alerted && (
+            <div className="flex items-center gap-1.5 text-red-400">
+              <AlertTriangle size={13} strokeWidth={1.5} />
+              <span className="text-xs font-medium">Alert</span>
+            </div>
+          )}
+        </div>
       </div>
     </Card>
   );
