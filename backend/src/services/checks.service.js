@@ -1,6 +1,7 @@
 import { withTransaction } from '../config/db.js';
 import { insertCheckLog, updateMonitorAfterCheck } from '../db/checks.queries.js';
 import { resolveAndValidate } from '../utils/url-safety.js';
+import { invalidateMonitorCache } from '../cache/monitorCache.js';
 
 const CHECK_TIMEOUT_MS = 5000;
 
@@ -94,4 +95,6 @@ export const processCheck = async (monitor, jobId) => {
       isAlerted,
     });
   });
+
+  await invalidateMonitorCache(monitor.monitorId, monitor.userId);
 };

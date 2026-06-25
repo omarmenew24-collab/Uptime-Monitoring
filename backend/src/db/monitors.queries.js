@@ -26,7 +26,7 @@ export const findMonitorsByUserId = async (userId) => {
 
 export const findMonitorByIdAndUser = async (monitorId, userId) => {
   const result = await query(
-    `SELECT ${SAFE_COLUMNS}, consecutive_failures, is_alerted
+    `SELECT ${SAFE_COLUMNS}, user_id, consecutive_failures, is_alerted
      FROM monitors
      WHERE id = $1 AND user_id = $2 AND is_deleted = false`,
     [monitorId, userId]

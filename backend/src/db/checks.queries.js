@@ -20,7 +20,7 @@ export const claimDueMonitors = async (limit) => {
        LIMIT $1
      ) AS due
      WHERE m.id = due.id
-     RETURNING m.id, m.url, m.failure_threshold, m.consecutive_failures, m.is_alerted`,
+     RETURNING m.id, m.user_id, m.url, m.failure_threshold, m.consecutive_failures, m.is_alerted`,
     [limit]
   );
   return result.rows;
