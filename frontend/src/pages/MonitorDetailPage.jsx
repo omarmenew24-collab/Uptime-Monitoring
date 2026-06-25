@@ -4,6 +4,8 @@ import { useMonitorDetail } from '@/hooks/useMonitorDetail';
 import { useCheckLogs, PAGE_SIZE } from '@/hooks/useCheckLogs';
 import MonitorHeader from '@/components/monitors/MonitorHeader';
 import StatsRow from '@/components/monitors/StatsRow';
+import UptimeBar from '@/components/monitors/UptimeBar';
+import ResponseTimeChart from '@/components/monitors/ResponseTimeChart';
 import CheckHistory from '@/components/monitors/CheckHistory';
 
 export default function MonitorDetailPage() {
@@ -43,6 +45,8 @@ export default function MonitorDetailPage() {
     <div className="flex flex-col gap-6">
       <MonitorHeader monitor={monitor} />
       <StatsRow monitor={monitor} stats={monitor.stats} />
+      <UptimeBar rollups={monitor.stats.rollups} />
+      <ResponseTimeChart rollups={monitor.stats.rollups} />
       <CheckHistory
         checks={loadedChecks}
         hasMore={hasMore}
