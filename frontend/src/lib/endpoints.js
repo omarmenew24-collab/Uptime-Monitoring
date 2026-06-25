@@ -2,4 +2,7 @@ export const ENDPOINTS = {
   MONITORS: '/api/monitors',
   MONITOR_DETAIL: (id) => `/api/monitors/${id}`,
   MONITOR_CHECKS: (id) => `/api/monitors/${id}/checks`,
+  MONITOR_PAUSE: (id) => `/api/monitors/${id}/pause`,
+  MONITOR_RESUME: (id) => `/api/monitors/${id}/resume`,
+  MONITOR_DELETE: (id) => `/api/monitors/${id}`,
 };

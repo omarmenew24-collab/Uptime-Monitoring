@@ -1,7 +1,9 @@
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Pause, Play, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import StatusBadge from './StatusBadge';
+import { usePauseMonitor, useResumeMonitor, useDeleteMonitor } from '@/hooks/useMonitors';
 
 function formatDate(dateString) {
   if (!dateString) return '—';
@@ -14,6 +16,23 @@ function formatDate(dateString) {
 
 export default function MonitorHeader({ monitor }) {
   const navigate = useNavigate();
+  const { pauseMonitor, isPending: pausePending } = usePauseMonitor();
+  const { resumeMonitor, isPending: resumePending } = useResumeMonitor();
+  const { deleteMonitor, isPending: deletePending } = useDeleteMonitor();
+
+  const handlePauseResume = async () => {
+    if (monitor.is_active) {
+      await pauseMonitor(monitor.id);
+    } else {
+      await resumeMonitor(monitor.id);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete "${monitor.name}"? Check history will be preserved but the monitor will stop running.`)) return;
+    await deleteMonitor(monitor.id);
+    navigate('/dashboard');
+  };
 
   return (
     <Card className="p-6">
@@ -47,6 +66,31 @@ export default function MonitorHeader({ monitor }) {
               <span>Created {formatDate(monitor.created_at)}</span>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePauseResume}
+            disabled={pausePending || resumePending}
+            className="gap-1.5 text-zinc-400 hover:text-zinc-100"
+          >
+            {monitor.is_active ? (
+              <><Pause size={14} strokeWidth={1.5} /> Pause</>
+            ) : (
+              <><Play size={14} strokeWidth={1.5} /> Resume</>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDelete}
+            disabled={deletePending}
+            className="gap-1.5 text-zinc-400 hover:text-red-400 hover:border-red-800"
+          >
+            <Trash2 size={14} strokeWidth={1.5} />
+          </Button>
         </div>
       </div>
     </Card>

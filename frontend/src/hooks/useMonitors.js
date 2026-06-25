@@ -58,3 +58,68 @@ export const useCreateMonitor = () => {
 
   return { createMyMonitor, isPending, isError, isSuccess };
 };
+
+export const usePauseMonitor = () => {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { mutateAsync: pauseMonitor, isPending } = useMutation({
+    mutationFn: async (monitorId) => {
+      const token = await getToken();
+      return api.patch(ENDPOINTS.MONITOR_PAUSE(monitorId), {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    },
+    onSuccess: (_, monitorId) => {
+      toast.success('Monitor paused');
+      queryClient.invalidateQueries({ queryKey: ['monitors'] });
+      queryClient.invalidateQueries({ queryKey: ['monitor', monitorId] });
+    },
+    onError: () => toast.error('Failed to pause monitor'),
+  });
+
+  return { pauseMonitor, isPending };
+};
+
+export const useResumeMonitor = () => {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { mutateAsync: resumeMonitor, isPending } = useMutation({
+    mutationFn: async (monitorId) => {
+      const token = await getToken();
+      return api.patch(ENDPOINTS.MONITOR_RESUME(monitorId), {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    },
+    onSuccess: (_, monitorId) => {
+      toast.success('Monitor resumed');
+      queryClient.invalidateQueries({ queryKey: ['monitors'] });
+      queryClient.invalidateQueries({ queryKey: ['monitor', monitorId] });
+    },
+    onError: () => toast.error('Failed to resume monitor'),
+  });
+
+  return { resumeMonitor, isPending };
+};
+
+export const useDeleteMonitor = () => {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { mutateAsync: deleteMonitor, isPending } = useMutation({
+    mutationFn: async (monitorId) => {
+      const token = await getToken();
+      return api.delete(ENDPOINTS.MONITOR_DELETE(monitorId), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    },
+    onSuccess: () => {
+      toast.success('Monitor deleted');
+      queryClient.invalidateQueries({ queryKey: ['monitors'] });
+    },
+    onError: () => toast.error('Failed to delete monitor'),
+  });
+
+  return { deleteMonitor, isPending };
+};

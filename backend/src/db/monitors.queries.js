@@ -24,6 +24,36 @@ export const findMonitorsByUserId = async (userId) => {
   return result.rows;
 };
 
+export const pauseMonitor = async (monitorId, userId) => {
+  const result = await query(
+    `UPDATE monitors SET is_active = false, updated_at = NOW()
+     WHERE id = $1 AND user_id = $2 AND is_deleted = false
+     RETURNING id, is_active`,
+    [monitorId, userId]
+  );
+  return result.rows[0] ?? null;
+};
+
+export const resumeMonitor = async (monitorId, userId) => {
+  const result = await query(
+    `UPDATE monitors SET is_active = true, next_check_at = NOW(), updated_at = NOW()
+     WHERE id = $1 AND user_id = $2 AND is_deleted = false
+     RETURNING id, is_active`,
+    [monitorId, userId]
+  );
+  return result.rows[0] ?? null;
+};
+
+export const softDeleteMonitor = async (monitorId, userId) => {
+  const result = await query(
+    `UPDATE monitors SET is_deleted = true, is_active = false, updated_at = NOW()
+     WHERE id = $1 AND user_id = $2 AND is_deleted = false
+     RETURNING id`,
+    [monitorId, userId]
+  );
+  return result.rows[0] ?? null;
+};
+
 export const findMonitorByIdAndUser = async (monitorId, userId) => {
   const result = await query(
     `SELECT ${SAFE_COLUMNS}, user_id, consecutive_failures, is_alerted

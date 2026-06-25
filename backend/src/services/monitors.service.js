@@ -1,4 +1,4 @@
-import { insertMonitor, findMonitorsByUserId, findMonitorByIdAndUser } from '../db/monitors.queries.js';
+import { insertMonitor, findMonitorsByUserId, findMonitorByIdAndUser, pauseMonitor, resumeMonitor, softDeleteMonitor } from '../db/monitors.queries.js';
 import { findChecksByMonitor } from '../db/checks.queries.js';
 import { enforceMonitorQuota } from '../middleware/quota.js';
 import { getRollupsByMonitor, getUptimePercentage } from '../db/rollups.queries.js';
@@ -48,6 +48,24 @@ export const getMonitorDetail = async (monitorId, userId) => {
   };
 
   await setCachedMonitorDetail(monitorId, result);
+  return result;
+};
+
+export const pause = async (monitorId, userId) => {
+  const result = await pauseMonitor(monitorId, userId);
+  if (result) await invalidateMonitorCache(monitorId, userId);
+  return result;
+};
+
+export const resume = async (monitorId, userId) => {
+  const result = await resumeMonitor(monitorId, userId);
+  if (result) await invalidateMonitorCache(monitorId, userId);
+  return result;
+};
+
+export const remove = async (monitorId, userId) => {
+  const result = await softDeleteMonitor(monitorId, userId);
+  if (result) await invalidateMonitorCache(monitorId, userId);
   return result;
 };
 

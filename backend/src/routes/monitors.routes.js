@@ -61,4 +61,43 @@ router.get('/:id/checks', async (req, res) => {
   }
 });
 
+router.patch('/:id/pause', async (req, res) => {
+  try {
+    const result = await monitorsService.pause(req.params.id, req.user.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Monitor not found' });
+    }
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    console.error('Pause monitor error:', err);
+    return res.status(500).json({ error: 'Failed to pause monitor' });
+  }
+});
+
+router.patch('/:id/resume', async (req, res) => {
+  try {
+    const result = await monitorsService.resume(req.params.id, req.user.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Monitor not found' });
+    }
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    console.error('Resume monitor error:', err);
+    return res.status(500).json({ error: 'Failed to resume monitor' });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const result = await monitorsService.remove(req.params.id, req.user.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Monitor not found' });
+    }
+    return res.status(204).end();
+  } catch (err) {
+    console.error('Delete monitor error:', err);
+    return res.status(500).json({ error: 'Failed to delete monitor' });
+  }
+});
+
 export default router;
