@@ -1,5 +1,6 @@
 import { insertMonitor, findMonitorsByUserId, findMonitorByIdAndUser } from '../db/monitors.queries.js';
 import { findChecksByMonitor } from '../db/checks.queries.js';
+import { enforceMonitorQuota } from '../middleware/quota.js';
 import { getRollupsByMonitor, getUptimePercentage } from '../db/rollups.queries.js';
 import {
   getCachedMonitorsByUser,
@@ -10,6 +11,7 @@ import {
 } from '../cache/monitorCache.js';
 
 export const createMonitor = async (userId, data) => {
+  await enforceMonitorQuota(userId);
   const monitor = await insertMonitor(userId, data);
   await invalidateMonitorCache(null, userId);
   return monitor;

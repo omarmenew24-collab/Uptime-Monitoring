@@ -14,6 +14,9 @@ router.post('/', async (req, res) => {
     const monitor = await monitorsService.createMonitor(req.user.id, parsed.data);
     return res.status(201).json({ data: monitor });
   } catch (err) {
+    if (err.statusCode === 403) {
+      return res.status(403).json({ error: err.message });
+    }
     console.error('Create monitor error:', err);
     return res.status(500).json({ error: 'Failed to create monitor' });
   }

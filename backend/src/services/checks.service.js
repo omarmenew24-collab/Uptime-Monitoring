@@ -3,6 +3,7 @@ import { insertCheckLog, updateMonitorAfterCheck } from '../db/checks.queries.js
 import { resolveAndValidate } from '../utils/url-safety.js';
 import { invalidateMonitorCache } from '../cache/monitorCache.js';
 import { notificationQueue } from '../queue/notificationQueue.js';
+import { acquireDomainSlot, releaseDomainSlot } from '../middleware/domainLimiter.js';
 
 const CHECK_TIMEOUT_MS = 5000;
 
@@ -65,7 +66,19 @@ export const runCheck = async (url) => {
 };
 
 export const processCheck = async (monitor, jobId) => {
-  const checkResult = await runCheck(monitor.url);
+  const domain = new URL(monitor.url).hostname;
+  const acquired = await acquireDomainSlot(domain);
+  if (!acquired) {
+    throw new Error(`Domain ${domain} concurrency limit reached`);
+  }
+
+  let checkResult;
+  try {
+    checkResult = await runCheck(monitor.url);
+  } finally {
+    await releaseDomainSlot(domain);
+  }
+
   const previouslyAlerted = monitor.isAlerted;
 
   let consecutiveFailures;
