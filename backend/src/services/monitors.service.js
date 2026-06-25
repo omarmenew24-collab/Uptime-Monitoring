@@ -1,5 +1,6 @@
 import { insertMonitor, findMonitorsByUserId, findMonitorByIdAndUser } from '../db/monitors.queries.js';
-import { getCheckStats, findChecksByMonitor } from '../db/checks.queries.js';
+import { findChecksByMonitor } from '../db/checks.queries.js';
+import { getRollupsByMonitor, getUptimePercentage } from '../db/rollups.queries.js';
 import {
   getCachedMonitorsByUser,
   setCachedMonitorsByUser,
@@ -33,8 +34,16 @@ export const getMonitorDetail = async (monitorId, userId) => {
   const monitor = await findMonitorByIdAndUser(monitorId, userId);
   if (!monitor) return null;
 
-  const stats = await getCheckStats(monitorId);
-  const result = { ...monitor, stats };
+  const rollups = await getRollupsByMonitor(monitorId, 30);
+  const uptimeData = await getUptimePercentage(monitorId, 30);
+  const uptimePercent = uptimeData.total > 0
+    ? ((uptimeData.up / uptimeData.total) * 100).toFixed(2)
+    : null;
+
+  const result = {
+    ...monitor,
+    stats: { rollups, uptimePercent, totalChecks: uptimeData.total },
+  };
 
   await setCachedMonitorDetail(monitorId, result);
   return result;

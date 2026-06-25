@@ -8,6 +8,7 @@ import { createCheckWorker } from './queue/checkWorker.js';
 import { createNotificationWorker } from './queue/notificationWorker.js';
 import { dispatchDueChecks } from './queue/dispatcher.js';
 import { deleteExpiredCheckLogs } from './db/retention.queries.js';
+import { runRollupJob } from './jobs/rollupJob.js';
 
 const checkWorker = createCheckWorker();
 const notificationWorker = createNotificationWorker();
@@ -28,6 +29,14 @@ const dispatchTask = cron.schedule('* * * * *', async () => {
   }
 });
 
+const rollupTask = cron.schedule('5 * * * *', async () => {
+  try {
+    await runRollupJob();
+  } catch (err) {
+    console.error('Rollup job error:', err);
+  }
+});
+
 const retentionTask = cron.schedule('0 3 * * *', async () => {
   try {
     await deleteExpiredCheckLogs();
@@ -42,6 +51,7 @@ const shutdown = async () => {
   if (shuttingDown) return;
   shuttingDown = true;
   dispatchTask.stop();
+  rollupTask.stop();
   retentionTask.stop();
   await checkWorker.close();
   await notificationWorker.close();

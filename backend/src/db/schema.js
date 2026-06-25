@@ -46,4 +46,20 @@ export const schema = {
     checked_at:       'timestamptz   NOT NULL  default now()',
     job_id:           'varchar       nullable  UNIQUE  (BullMQ job id — idempotency key)',
   },
+
+  check_rollups: {
+    id:               'uuid          PK   gen_random_uuid()',
+    monitor_id:       'uuid          NOT NULL  FK → monitors.id  ON DELETE CASCADE',
+    date:             'date          NOT NULL',
+    total_checks:     'integer       NOT NULL  default 0',
+    up_count:         'integer       NOT NULL  default 0',
+    down_count:       'integer       NOT NULL  default 0',
+    timeout_count:    'integer       NOT NULL  default 0',
+    avg_response_ms:  'integer       nullable',
+    min_response_ms:  'integer       nullable',
+    max_response_ms:  'integer       nullable',
+    _constraints: [
+      'UNIQUE(monitor_id, date)',
+    ],
+  },
 };

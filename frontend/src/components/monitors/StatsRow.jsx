@@ -23,13 +23,16 @@ function StatCard({ label, value, className }) {
 export default function StatsRow({ monitor, stats }) {
   const statusLabel = monitor.last_status?.toUpperCase() || 'PENDING';
   const statusColor = statusColors[monitor.last_status] || 'text-zinc-400';
-  const avgResponse = stats.avg_response_ms != null ? `${stats.avg_response_ms}ms` : '—';
+  const uptimeDisplay = stats.uptimePercent != null ? `${stats.uptimePercent}%` : '—';
+  const latestRollup = stats.rollups?.[stats.rollups.length - 1];
+  const avgResponse = latestRollup?.avg_response_ms != null ? `${latestRollup.avg_response_ms}ms` : '—';
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-4 gap-4">
       <StatCard label="Current Status" value={statusLabel} className={statusColor} />
+      <StatCard label="Uptime (30d)" value={uptimeDisplay} className="text-emerald-400" />
       <StatCard label="Avg Response" value={avgResponse} className="text-zinc-100" />
-      <StatCard label="Total Checks" value={stats.total_checks.toLocaleString()} className="text-zinc-100" />
+      <StatCard label="Total Checks" value={(stats.totalChecks || 0).toLocaleString()} className="text-zinc-100" />
     </div>
   );
 }
