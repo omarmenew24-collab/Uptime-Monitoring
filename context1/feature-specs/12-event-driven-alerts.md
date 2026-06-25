@@ -1,10 +1,10 @@
 # 12 — Event-Driven Alerting Fan-Out (Phase 3)
 
 > System-design phase 3 of `system-design-roadmap.md`. This spec makes the app
-> actually **tell the user** when their site goes down. The worker publishes a
-> state-change event; independent consumers subscribe and send email/Slack.
-> Read `architecture.md` invariant 9 before starting: workers never call
-> notification channels directly.
+> actually **tell the user** when their site goes down. The worker enqueues a
+> notification job on a durable BullMQ queue; independent consumer processors
+> send email and Slack. Read `architecture.md` invariant 9 before starting:
+> workers never call notification channels directly.
 
 ## What this covers
 
@@ -15,32 +15,46 @@ is down unless they're staring at the dashboard.
 
 This spec adds:
 
-1. An **event bus** (Redis pub/sub) — when the worker detects a state transition,
-   it publishes a `monitor.down` or `monitor.recovered` event instead of directly
-   sending notifications.
-2. An **email consumer** — subscribes to the event bus, looks up the user's email,
-   and sends a downtime/recovery email.
-3. A **Slack consumer** — subscribes to the same event bus and sends a
-   downtime/recovery message to a Slack webhook URL.
+1. A **durable notification queue** (BullMQ) — when the worker detects a state
+   transition, it enqueues a notification job. The job is durable: if the worker
+   crashes between the DB commit and the enqueue, BullMQ retries it; if sending
+   fails, the job retries with backoff; if it keeps failing, it lands in the
+   dead-letter set instead of disappearing.
+2. A **notification worker** — consumes the notification queue and fans out to
+   all channels: email and Slack. Adding a third channel means adding a function
+   call inside this one processor — the check worker is never touched.
+3. An **email sender** — looks up the user's email and sends via nodemailer.
+4. A **Slack sender** — looks up the user's Slack webhook URL and POSTs.
 
-The worker doesn't know or care how many consumers exist. Adding a third channel
-(Discord, SMS, whatever) means adding a consumer — the worker is never touched.
-That's the fan-out pattern.
+The check worker doesn't know or care what notification channels exist. It
+enqueues a notification job. That's invariant 9.
 
-### Why this is Phase 3 (requirement 4)
+### Why durable queue, not pub/sub
 
-A single down→up transition must reach email AND Slack without the checker
-knowing about either channel. Without events, the worker would need to import
-the email sender, the Slack sender, and any future sender — coupled to every
-channel, edited every time one is added. The event bus decouples them.
+The first version of this spec used Redis pub/sub (fire-and-forget). That was
+wrong for three reasons:
+
+1. **Lost notifications.** If the worker crashes between committing
+   `is_alerted = true` and publishing the event, the notification vanishes. For
+   an uptime monitor — whose entire purpose is telling you when things break —
+   losing a down notification is a critical failure.
+2. **No retry on send failure.** If the SMTP server is down or Slack returns 500,
+   pub/sub swallows the error. The notification is gone. A durable queue retries
+   with backoff automatically.
+3. **We already have BullMQ.** Adding a second queue is zero new infrastructure.
+   We get retries, backoff, dead-letter, and concurrency control for free.
+
+The fan-out concept (one event → many consumers) is still learned. We just
+learn it correctly — with durability.
 
 ### What this teaches
 
-- Pub/sub pattern (publish once, many subscribers)
-- Decoupling producers from consumers via events
-- Fan-out (one event → many reactions)
-- Idempotent consumers (same event delivered twice → one notification)
-- The difference between "fire and forget" pub/sub and durable event delivery
+- Decoupling producers from consumers (the check worker enqueues, the
+  notification worker processes — invariant 9)
+- Fan-out (one notification job → email + Slack + future channels)
+- Durable event delivery vs fire-and-forget pub/sub (and why it matters)
+- Retry with backoff on transient failures (SMTP down, Slack 500)
+- Dead-letter for persistent failures (wrong email, revoked webhook)
 
 ---
 
@@ -49,198 +63,146 @@ channel, edited every time one is added. The event bus decouples them.
 **Backend has:**
 - `services/checks.service.js` — `processCheck(monitor, jobId)` detects
   transitions via the state machine:
-  - `is_alerted` goes from `false` to `true` → threshold crossed (down event)
-  - `is_alerted` goes from `true` to `false` → recovered (recovery event)
-  - Currently: sets the flag in Postgres, does nothing else
-- `queue/connection.js` — ioredis connection for BullMQ (`maxRetriesPerRequest:
-  null`). Redis pub/sub needs **separate connections** — a subscribed connection
-  can't run other commands.
-- `worker.js` — the worker process entrypoint; consumers will be started here
-- `db/schema.js` — `users` table has `email`; no Slack webhook URL column yet
-- Job payload includes: `monitorId`, `userId`, `url`, `failureThreshold`,
-  `consecutiveFailures`, `isAlerted`
-- Job payload does NOT include: `name` (the monitor's display name — needed for
-  notification messages)
+  - `is_alerted` goes from `false` to `true` → threshold crossed (down)
+  - `is_alerted` goes from `true` to `false` → recovered
+- `queue/connection.js` — shared ioredis connection for BullMQ
+- `queue/checkQueue.js` — existing BullMQ queue pattern to follow
+- `worker.js` — the worker process entrypoint
+- `db/schema.js` — `users` table has `email`; `slack_webhook_url` column
+  already added (migration `1750000000003`)
+- `db/users.queries.js` — `findUserById(userId)` returns `email` and
+  `slack_webhook_url`
+- Job payload includes: `monitorId`, `userId`, `monitorName`, `url`,
+  `failureThreshold`, `consecutiveFailures`, `isAlerted`
 
-**Architecture invariant 9:** Workers never call notification channels directly —
-they publish events; consumers react. Adding a channel must not touch the checker.
-
----
-
-## The event
-
-Two event types, published to a Redis pub/sub channel named `monitor:events`:
-
-**`monitor.down`** — published when `is_alerted` transitions from `false` to `true`
-
-```json
-{
-  "type": "monitor.down",
-  "monitorId": "32996f2a-...",
-  "userId": "abc-...",
-  "monitorName": "My API",
-  "url": "https://api.example.com",
-  "consecutiveFailures": 3,
-  "failureThreshold": 3,
-  "timestamp": "2026-06-25T10:30:00.000Z"
-}
-```
-
-**`monitor.recovered`** — published when `is_alerted` transitions from `true` to `false`
-
-```json
-{
-  "type": "monitor.recovered",
-  "monitorId": "32996f2a-...",
-  "userId": "abc-...",
-  "monitorName": "My API",
-  "url": "https://api.example.com",
-  "timestamp": "2026-06-25T10:45:00.000Z"
-}
-```
-
-The event carries everything a consumer needs to send a notification — no
-consumer queries the database. This keeps consumers stateless and fast.
+**Already done (kept from v1 of this spec):**
+- Migration `1750000000003` (slack_webhook_url) — already applied
+- `db/users.queries.js` — already created
+- `checks.queries.js` — already returns `m.name` from claimDueMonitors
+- `dispatcher.js` — already includes `monitorName` in job payload
+- `nodemailer` — already installed
+- `.env` — already has SMTP vars
 
 ---
 
-## Pub/Sub vs durable queue — a deliberate choice
+## Files to rewrite
 
-Redis pub/sub is **fire-and-forget**: if no one is listening when an event is
-published, it's lost. A durable alternative (BullMQ queue per consumer) would
-guarantee delivery even if a consumer is temporarily down.
+### 1. `events/eventBus.js` → **delete entirely**
 
-For this spec, pub/sub is the honest choice:
-- The consumers run in the same process as the worker (they start and stop
-  together) — there is no "consumer is down but publisher is up" scenario
-- A missed alert on a restart is acceptable — the next check cycle will
-  re-detect the condition if it persists
-- Learning pub/sub as a pattern is the goal; durable event streaming (Kafka,
-  Redis Streams) is a different concept for a different project
+Redis pub/sub is replaced by a BullMQ queue. This file is no longer needed.
 
-This is documented as a deliberate tradeoff, not an oversight.
-
----
-
-## Migration — add Slack webhook URL to users
-
-`src/db/migrations/1750000000003_users-slack-webhook.js`
+### 2. `queue/notificationQueue.js` — the durable notification queue (new)
 
 ```js
-export const up = (pgm) => {
-  pgm.addColumn('users', {
-    slack_webhook_url: { type: 'varchar', notNull: false },
-  });
-};
+import { Queue } from 'bullmq';
+import { connection } from './connection.js';
 
-export const down = (pgm) => {
-  pgm.dropColumn('users', 'slack_webhook_url');
-};
+export const NOTIFICATION_QUEUE_NAME = 'notifications';
+
+export const notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, {
+  connection,
+  defaultJobOptions: {
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 2000 },
+    removeOnComplete: { count: 500 },
+    removeOnFail: { count: 5000 },
+  },
+});
 ```
 
-Nullable — Slack is optional. If a user hasn't set a webhook URL, the Slack
-consumer skips them silently.
+Same pattern as `checkQueue.js`. 5 attempts with exponential backoff (2s, 4s,
+8s, 16s, 32s) — email/Slack transient failures get multiple chances. Failed
+jobs stay in the dead-letter set for inspection.
 
----
-
-## Files to create
-
-### 1. `events/eventBus.js` — publish and subscribe helpers
+### 3. `queue/notificationWorker.js` — the consumer (new)
 
 ```js
-import IORedis from 'ioredis';
+import { Worker } from 'bullmq';
+import { connection } from './connection.js';
+import { NOTIFICATION_QUEUE_NAME } from './notificationQueue.js';
+import { sendEmailNotification } from '../events/consumers/emailConsumer.js';
+import { sendSlackNotification } from '../events/consumers/slackConsumer.js';
 
-const CHANNEL = 'monitor:events';
-```
-
-**`createPublisher()`** — returns an ioredis client dedicated to publishing.
-One function: `publish(event)` — JSON-stringifies the event and publishes to
-the channel.
-
-**`createSubscriber(handler)`** — creates a **new** ioredis connection (pub/sub
-requires a dedicated connection), subscribes to the channel, and calls
-`handler(event)` for every message received. Returns the subscriber connection
-(for cleanup on shutdown).
-
-Both use `process.env.REDIS_URL`.
-
-### 2. `events/consumers/emailConsumer.js` — send downtime/recovery emails
-
-**`handleEmailEvent(event)`**
-
-1. Look up the user's email by `event.userId` (one query: `SELECT email FROM
-   users WHERE id = $1`)
-2. If `event.type === 'monitor.down'`:
-   - Send email: subject = `🔴 ${event.monitorName} is DOWN`
-   - Body includes: URL, consecutive failures, threshold, timestamp
-3. If `event.type === 'monitor.recovered'`:
-   - Send email: subject = `✅ ${event.monitorName} is back UP`
-   - Body includes: URL, timestamp
-
-**Email transport:** Use `nodemailer` with a configurable SMTP transport (env
-vars: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`). For
-development/testing, use Ethereal (free fake SMTP that captures emails without
-sending them — `nodemailer.createTestAccount()`).
-
-**Idempotency:** The consumer is naturally idempotent because `is_alerted` is
-only set once per incident — the worker won't publish a second `monitor.down`
-for the same incident. If a duplicate event somehow arrives (pub/sub doesn't
-deduplicate), sending a second identical email is acceptable — it's not
-dangerous, just redundant.
-
-### 3. `events/consumers/slackConsumer.js` — send Slack notifications
-
-**`handleSlackEvent(event)`**
-
-1. Look up the user's `slack_webhook_url` by `event.userId` (one query:
-   `SELECT slack_webhook_url FROM users WHERE id = $1`)
-2. If `slack_webhook_url` is null, skip silently (Slack not configured)
-3. If `event.type === 'monitor.down'`:
-   - POST to the webhook URL with a Slack message payload:
-     `🔴 *${event.monitorName}* is DOWN — ${event.consecutiveFailures}
-     consecutive failures`
-4. If `event.type === 'monitor.recovered'`:
-   - POST to the webhook URL:
-     `✅ *${event.monitorName}* is back UP`
-
-**No library needed** — Slack incoming webhooks are a simple HTTP POST with a
-JSON body. Use native `fetch`.
-
-### 4. `db/users.queries.js` — user lookup for consumers
-
-```js
-export const findUserById = async (userId) => {
-  const result = await query(
-    'SELECT id, email, slack_webhook_url FROM users WHERE id = $1',
-    [userId]
+export const createNotificationWorker = () =>
+  new Worker(
+    NOTIFICATION_QUEUE_NAME,
+    async (job) => {
+      await sendEmailNotification(job.data);
+      await sendSlackNotification(job.data);
+    },
+    { connection, concurrency: 10 }
   );
-  return result.rows[0] ?? null;
+```
+
+Concurrency 10 — notifications are I/O-bound (SMTP, HTTP) but not as heavy as
+check execution. Fan-out happens inside the processor: email first, then Slack.
+Adding a third channel means adding one function call here.
+
+If either sender throws, BullMQ retries the entire job. This means the email
+might be sent twice on a Slack-only failure. That's acceptable — a duplicate
+"your site is down" email is harmless; a lost one is not. If we needed per-
+channel retry isolation, each channel would get its own queue — unjustified
+here.
+
+### 4. `events/consumers/emailConsumer.js` — rewrite
+
+Rename the export from `handleEmailEvent` to `sendEmailNotification`. Remove
+the try/catch wrapper — let errors propagate to BullMQ so it can retry:
+
+```js
+export const sendEmailNotification = async (event) => {
+  const user = await findUserById(event.userId);
+  if (!user) return;
+
+  if (event.type === 'monitor.down') {
+    await sendEmail(user.email, subject, body);
+  }
+  if (event.type === 'monitor.recovered') {
+    await sendEmail(user.email, subject, body);
+  }
 };
 ```
 
-Consumers share this query. Keeps DB access in the `db/` layer per code
-standards.
+No try/catch — if `sendEmail` throws (SMTP down), the error bubbles up to
+BullMQ, which marks the job as failed and schedules a retry. The old version
+caught the error and silently swallowed it.
+
+### 5. `events/consumers/slackConsumer.js` — rewrite
+
+Rename to `sendSlackNotification`. Remove try/catch. Check response status:
+
+```js
+export const sendSlackNotification = async (event) => {
+  const user = await findUserById(event.userId);
+  if (!user?.slack_webhook_url) return;
+
+  const response = await fetch(user.slack_webhook_url, { ... });
+  if (!response.ok) {
+    throw new Error(`Slack webhook failed: ${response.status}`);
+  }
+};
+```
+
+Throwing on non-2xx makes BullMQ retry — the old version swallowed Slack errors.
 
 ---
 
 ## Files to change
 
-### `services/checks.service.js` — publish events on state transitions
+### `services/checks.service.js` — enqueue instead of publish
 
-The state machine in `processCheck` already detects two transitions:
-- `isAlerted` was `false`, now `true` → **down event**
-- `isAlerted` was `true`, now `false` → **recovery event**
-
-After the transaction commits (and after cache invalidation), publish the
-appropriate event:
+Replace the `setEventPublisher` / `publishEvent` pattern with a direct
+import of the notification queue:
 
 ```js
-const previouslyAlerted = monitor.isAlerted;
+import { notificationQueue } from '../queue/notificationQueue.js';
+```
 
-// ... existing state machine + transaction ...
+After the transaction commits and cache is invalidated:
 
+```js
 if (!previouslyAlerted && isAlerted) {
-  await publish({
+  await notificationQueue.add('monitor.down', {
     type: 'monitor.down',
     monitorId: monitor.monitorId,
     userId: monitor.userId,
@@ -253,7 +215,7 @@ if (!previouslyAlerted && isAlerted) {
 }
 
 if (previouslyAlerted && !isAlerted) {
-  await publish({
+  await notificationQueue.add('monitor.recovered', {
     type: 'monitor.recovered',
     monitorId: monitor.monitorId,
     userId: monitor.userId,
@@ -264,65 +226,25 @@ if (previouslyAlerted && !isAlerted) {
 }
 ```
 
-Publishing happens **after** the transaction commits — if the transaction
-rolls back, no event is published. If publishing fails (Redis blip), the
-alert flag is still set correctly in Postgres; the user just misses the
-notification this cycle.
+No `setEventPublisher` pattern needed — `notificationQueue` is a regular
+import. The `add()` call is durable: the job persists in Redis and survives
+a crash.
 
-### `checks.queries.js` — add `name` to claimDueMonitors RETURNING
+### `worker.js` — replace pub/sub with notification worker
 
-Add `m.name` to the RETURNING clause so it flows through the dispatcher →
-job payload → event. Currently returns `id, user_id, url, failure_threshold,
-consecutive_failures, is_alerted`.
+Remove: `createPublisher`, `createSubscriber`, `setEventPublisher`, and the
+pub/sub handler.
 
-### `queue/dispatcher.js` — add `monitorName` to job data
-
-Add `monitorName: monitor.name` to the data object.
-
-### `worker.js` — start event consumers on boot, close on shutdown
-
-```js
-import { createPublisher, createSubscriber } from './events/eventBus.js';
-import { handleEmailEvent } from './events/consumers/emailConsumer.js';
-import { handleSlackEvent } from './events/consumers/slackConsumer.js';
-
-const publisher = createPublisher();
-const subscriber = createSubscriber(async (event) => {
-  await handleEmailEvent(event);
-  await handleSlackEvent(event);
-});
-```
-
-On shutdown, close the subscriber and publisher connections alongside the
-existing cleanup.
-
-Export the publisher so `checks.service.js` can import and use it.
-
-### `.env` / `.env.example` — add SMTP and alert config
-
-```
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USER=
-SMTP_PASS=
-SMTP_FROM=alerts@uptime.example.com
-```
-
-For development, leave these empty — the email consumer will use Ethereal
-(a free test SMTP service that captures emails without delivering them) and
-log the preview URL to the console.
+Add: `createNotificationWorker()` and close it on shutdown.
 
 ---
 
 ## What this spec does NOT cover
 
-- UI for configuring Slack webhook URL per user (can be set directly in the
-  database for now; a settings page is a separate spec)
+- UI for configuring Slack webhook URL (settings page is a separate spec)
 - UI for notification preferences (email on/off, Slack on/off)
-- Rate limiting notifications (e.g., max 10 emails per hour) — Phase 5
-  (backpressure)
-- Durable event delivery (Redis Streams / Kafka) — deliberately refused; pub/sub
-  is the honest fit for same-process consumers
+- Rate limiting notifications — Phase 5 (backpressure)
+- Per-channel retry isolation (separate queues per channel)
 - Notification history / audit log
 - SMS or other channels beyond email and Slack
 
@@ -330,30 +252,24 @@ log the preview URL to the console.
 
 ## Acceptance criteria
 
-1. When a monitor crosses `failure_threshold`, the worker publishes a
-   `monitor.down` event — an email is sent to the user and a Slack message is
-   posted (if webhook URL is configured)
-2. When a down monitor recovers, the worker publishes a `monitor.recovered`
-   event — a recovery email and Slack message are sent
-3. No duplicate alerts per incident — `monitor.down` is published only on the
-   `false→true` transition of `is_alerted`, not on every failed check
-4. The worker does NOT import the email or Slack consumer — it publishes an
-   event; consumers subscribe independently (invariant 9)
-5. If a user has no `slack_webhook_url`, the Slack consumer skips silently
-6. If SMTP is not configured, the email consumer uses Ethereal and logs the
-   preview URL (development mode)
-7. If Redis pub/sub fails, the alert flag is still set in Postgres — the
-   notification is missed but the state is correct
-8. Adding a third notification channel requires only adding a new consumer
-   file and subscribing it in `worker.js` — no changes to `checks.service.js`
-
----
-
-## After this spec
-
-Add a `learning.md` entry documenting the before→after: direct flag-setting with
-no notification (the naive version) vs. event-driven fan-out where the worker
-publishes and consumers react independently. Include the pub/sub vs durable
-delivery tradeoff and why pub/sub is the honest choice here.
-
-Install dependency: `cd backend && npm install nodemailer`
+1. When a monitor crosses `failure_threshold`, a `monitor.down` notification
+   job is enqueued — an email is sent and a Slack message is posted (if webhook
+   configured)
+2. When a down monitor recovers, a `monitor.recovered` notification job is
+   enqueued — recovery email and Slack message are sent
+3. No duplicate alerts per incident — only published on the `false→true` /
+   `true→false` transition of `is_alerted`
+4. The check worker does NOT import email or Slack consumers — it enqueues a
+   notification job; the notification worker processes it (invariant 9)
+5. If a user has no `slack_webhook_url`, the Slack sender skips silently
+6. If SMTP is not configured, the email sender uses Ethereal and logs the
+   preview URL
+7. If email or Slack sending fails, BullMQ retries with exponential backoff
+   (5 attempts). Persistent failures land in the dead-letter set.
+8. If the worker crashes between the DB commit and the enqueue, the
+   notification job is not lost — it was never enqueued, but `is_alerted` is
+   set in Postgres, so the state is correct. (The notification is missed for
+   this incident; a future hardening with a transactional outbox would close
+   this gap — deliberately refused, not in the forcing-requirement table.)
+9. Adding a third notification channel requires adding a sender function and
+   one call in `notificationWorker.js` — no changes to `checks.service.js`

@@ -2,14 +2,9 @@ import { withTransaction } from '../config/db.js';
 import { insertCheckLog, updateMonitorAfterCheck } from '../db/checks.queries.js';
 import { resolveAndValidate } from '../utils/url-safety.js';
 import { invalidateMonitorCache } from '../cache/monitorCache.js';
+import { notificationQueue } from '../queue/notificationQueue.js';
 
 const CHECK_TIMEOUT_MS = 5000;
-
-let publishEvent = null;
-
-export const setEventPublisher = (publishFn) => {
-  publishEvent = publishFn;
-};
 
 export const runCheck = async (url) => {
   const dnsCheck = await resolveAndValidate(url);
@@ -104,9 +99,9 @@ export const processCheck = async (monitor, jobId) => {
 
   await invalidateMonitorCache(monitor.monitorId, monitor.userId);
 
-  if (publishEvent && consecutiveFailures !== undefined) {
+  if (consecutiveFailures !== undefined) {
     if (!previouslyAlerted && isAlerted) {
-      await publishEvent({
+      await notificationQueue.add('monitor.down', {
         type: 'monitor.down',
         monitorId: monitor.monitorId,
         userId: monitor.userId,
@@ -119,7 +114,7 @@ export const processCheck = async (monitor, jobId) => {
     }
 
     if (previouslyAlerted && !isAlerted) {
-      await publishEvent({
+      await notificationQueue.add('monitor.recovered', {
         type: 'monitor.recovered',
         monitorId: monitor.monitorId,
         userId: monitor.userId,

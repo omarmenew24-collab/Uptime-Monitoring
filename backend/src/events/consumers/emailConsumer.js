@@ -43,39 +43,35 @@ const sendEmail = async (to, subject, text) => {
   }
 };
 
-export const handleEmailEvent = async (event) => {
-  try {
-    const user = await findUserById(event.userId);
-    if (!user) return;
+export const sendEmailNotification = async (event) => {
+  const user = await findUserById(event.userId);
+  if (!user) return;
 
-    if (event.type === 'monitor.down') {
-      await sendEmail(
-        user.email,
-        `🔴 ${event.monitorName} is DOWN`,
-        [
-          `Your monitor "${event.monitorName}" is down.`,
-          '',
-          `URL: ${event.url}`,
-          `Consecutive failures: ${event.consecutiveFailures}`,
-          `Failure threshold: ${event.failureThreshold}`,
-          `Detected at: ${event.timestamp}`,
-        ].join('\n')
-      );
-    }
+  if (event.type === 'monitor.down') {
+    await sendEmail(
+      user.email,
+      `🔴 ${event.monitorName} is DOWN`,
+      [
+        `Your monitor "${event.monitorName}" is down.`,
+        '',
+        `URL: ${event.url}`,
+        `Consecutive failures: ${event.consecutiveFailures}`,
+        `Failure threshold: ${event.failureThreshold}`,
+        `Detected at: ${event.timestamp}`,
+      ].join('\n')
+    );
+  }
 
-    if (event.type === 'monitor.recovered') {
-      await sendEmail(
-        user.email,
-        `✅ ${event.monitorName} is back UP`,
-        [
-          `Your monitor "${event.monitorName}" has recovered.`,
-          '',
-          `URL: ${event.url}`,
-          `Recovered at: ${event.timestamp}`,
-        ].join('\n')
-      );
-    }
-  } catch (err) {
-    console.error('Email consumer error:', err.message);
+  if (event.type === 'monitor.recovered') {
+    await sendEmail(
+      user.email,
+      `✅ ${event.monitorName} is back UP`,
+      [
+        `Your monitor "${event.monitorName}" has recovered.`,
+        '',
+        `URL: ${event.url}`,
+        `Recovered at: ${event.timestamp}`,
+      ].join('\n')
+    );
   }
 };
