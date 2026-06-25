@@ -22,16 +22,14 @@ change.
 ## Next Up
 
 The MVP feature specs (01–08) are the Phase 0 baseline. The system-design
-phases in `system-design-roadmap.md` build on top of them, one at a time, each
-when its trigger hits:
+phases in `system-design-roadmap.md` build on top of them, in order — each
+justified by a forcing requirement, each gated by "the previous phase is done":
 
-- Phase 1 — extract worker + durable queue (BullMQ/Redis); idempotent jobs; retries/backoff/DLQ
+- Phase 1 ✅ — extract worker + durable queue (BullMQ/Redis); idempotent jobs; retries/backoff/DLQ
 - Phase 2 — cache the read path (dashboard + status page)
 - Phase 3 — event-driven alerting fan-out (email + Slack)
 - Phase 4 — time-series rollups + tiered retention
 - Phase 5 — observability + backpressure
-
-Do not start a later phase while an earlier phase's trigger has not been reached.
 
 ## Open Questions
 
@@ -50,9 +48,15 @@ Do not start a later phase while an earlier phase's trigger has not been reached
   Postgres remains the only source of truth.
 - **2026-06-22 — API and Worker are separate deployables** sharing Postgres and
   Redis, so check execution scales horizontally without code changes.
-- **2026-06-22 — Seams now, mechanisms on pain.** Design the job/worker/event
-  seams from the start, but switch on each mechanism only when its phase trigger
-  is reached. Document each naive "before" as a `learning.md` entry.
+- **2026-06-22 — Build in order, every phase justified.** Each phase is in
+  scope (justified by a forcing requirement); build sequentially (1→2→3→4→5),
+  gated by "previous phase done." Document each "before/after" as a
+  `learning.md` entry.
+- **2026-06-25 — Dropped trigger gates.** The roadmap originally said "build
+  each phase only when its trigger is felt in production." Since this is a
+  learning project, production pain will never arrive — so the gate is now
+  "previous phase done," not "wait for scale." The forcing requirements still
+  justify each phase; only the timing changed.
 
 ## Session Notes
 

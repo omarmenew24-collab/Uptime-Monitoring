@@ -439,7 +439,8 @@ Run the system with two processes: `npm run dev` (API) and `npm run worker:dev`.
   fails (e.g. Redis blips) after the claim commits, that monitor is simply not
   checked this cycle and is picked up again once `next_check_at` passes — delayed
   by one interval, never lost. Wrapping claim+enqueue in an outbox is the durable
-  fix; unjustified at this scale, so it is deliberately deferred.
+  fix (a transactional outbox); deliberately refused — not in the
+  forcing-requirement table.
 
 ---
 

@@ -1,9 +1,9 @@
 # Architecture Context
 
-> This describes the **target architecture**. The pieces (queue, cache, event
-> bus, rollups) are introduced in the order and at the triggers defined in
-> `system-design-roadmap.md` — seams first, mechanisms when their requirement
-> bites. Do not build a later phase while an earlier one's trigger has not hit.
+> This describes the **target architecture**. Every piece (queue, cache, event
+> bus, rollups) is justified by a forcing requirement in
+> `system-design-roadmap.md` and will be built. Build in phase order
+> (1→2→3→4→5); each phase's gate is "the previous one is done."
 
 ## Stack
 

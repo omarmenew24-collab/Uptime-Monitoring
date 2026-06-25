@@ -100,20 +100,21 @@ concurrency, repeatable jobs out of the box).
 
 ---
 
-## Build order — seams now, mechanisms on pain
+## Build order — in sequence, each justified
 
-We design the seams (jobs are first-class; checker is separate from the API)
-from the start, but we switch on each mechanism at the moment its requirement
-bites. Every phase documents the naive "before" as a `learning.md` entry — that
-is how we learn *why*, not just *how*.
+Every phase is **in scope and will be built.** The forcing-requirement table
+above justifies each one — they are not hypothetical. Build them in order
+(1→2→3→4→5) because each builds on the last. The gate is "the previous phase
+is done," not "wait for production pain." Every phase documents a `learning.md`
+entry showing the naive approach and why the real approach replaces it.
 
-### Phase 0 — Baseline monolith *(done / in progress: specs 01–08)*
+### Phase 0 — Baseline monolith *(done: specs 01–08)*
 In-process `node-cron` tick that selects due monitors and checks them with
 bounded concurrency. This is the "before" the rest of the roadmap reacts to.
 
-### Phase 1 — Extract the worker + durable queue
-- **Trigger:** Try to run 2 instances or deploy mid-check → double-checks and
-  lost in-flight work.
+### Phase 1 — Extract the worker + durable queue *(done: spec 09)*
+- **Requirement:** checks must scale across processes and survive crashes
+  (req 1, 2). Without this, two instances double-check; a crash loses work.
 - **Build:** Dispatcher enqueues one check job per due monitor; a separate
   worker process consumes via BullMQ; check processing made idempotent; rely on
   BullMQ for retries/backoff/dead-letter; graceful shutdown drains in-flight jobs.
@@ -121,28 +122,35 @@ bounded concurrency. This is the "before" the rest of the roadmap reacts to.
   idempotency, work-claiming, graceful shutdown.
 
 ### Phase 2 — Cache the read path
-- **Trigger:** Dashboard (and the new public status page) aggregates get slow.
+- **Requirement:** the dashboard and status page poll constantly; every request
+  hits Postgres for data that changes only every few minutes (req 3). Without
+  caching, read load scales linearly with users.
 - **Build:** Redis cache for current status + uptime %; cache-aside reads;
   invalidate/update on each check write; TTL as a safety net; guard against
   cache stampede.
 - **Learn:** caching patterns, invalidation, TTL strategy, stampede protection.
 
 ### Phase 3 — Event-driven alerting fan-out
-- **Trigger:** Add Slack as a second channel without touching the checker.
+- **Requirement:** a status transition must reach email AND Slack without the
+  checker knowing about either channel (req 4). Without events, the checker is
+  coupled to every notification channel.
 - **Build:** Worker emits a state-change event; independent, idempotent
   consumers for email and Slack subscribe to it.
 - **Learn:** pub/sub, decoupling via events, fan-out, idempotent consumers.
 
 ### Phase 4 — Time-series rollups + tiered retention
-- **Trigger:** History/response-time graphs slow down; `check_logs` bloats.
+- **Requirement:** uptime/response-time graphs and the status page need
+  aggregated data; raw `check_logs` grows unbounded (req 5). Without rollups,
+  history queries scan millions of rows and storage grows without bound.
 - **Build:** Rollup job aggregating raw checks into hourly/daily buckets;
   tiered retention (keep raw for N days, rollups for longer).
 - **Learn:** time-series aggregation, rollup jobs, partitioning vs row-by-row
   delete tradeoffs.
 
 ### Phase 5 — Observability + backpressure
-- **Trigger:** Operating the distributed checker blind; need per-target
-  politeness and per-user quotas.
+- **Requirement:** a distributed checker must report its own health, and
+  targets/users must be rate-limited (req 6). Without observability, failures go
+  unnoticed; without rate limiting, targets get hammered and quotas get blown.
 - **Build:** Metrics for queue depth, worker lag, check latency p50/p99;
   per-domain rate limiting; per-user monitor quotas.
 - **Learn:** observability, rate limiting, backpressure.
@@ -151,8 +159,13 @@ bounded concurrency. This is the "before" the rest of the roadmap reacts to.
 
 ## How this interacts with the project rules
 
-- The "build what's needed now" rule is preserved: each phase ships only when
-  its trigger is real. We do **not** build Phase 3 while still on Phase 1.
+- Every phase is in scope and justified — the forcing-requirement table is the
+  justification, not production traffic.
+- Build in order (1→2→3→4→5); the gate is "previous phase done," not
+  "production pain felt."
+- The anti-cargo-cult list (refused items) still applies: don't add what no
+  requirement forces. The difference is between items *in* the table (build them)
+  and items *not* in the table (refuse them).
 - When a phase changes a boundary or invariant, update `architecture.md` in the
   same step (per `ai-workflow-rules.md`).
 - Each phase's "before/after" gets a `learning.md` entry — the existing bug log

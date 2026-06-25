@@ -23,3 +23,13 @@ export const findMonitorsByUserId = async (userId) => {
   );
   return result.rows;
 };
+
+export const findMonitorByIdAndUser = async (monitorId, userId) => {
+  const result = await query(
+    `SELECT ${SAFE_COLUMNS}, consecutive_failures, is_alerted
+     FROM monitors
+     WHERE id = $1 AND user_id = $2 AND is_deleted = false`,
+    [monitorId, userId]
+  );
+  return result.rows[0] ?? null;
+};

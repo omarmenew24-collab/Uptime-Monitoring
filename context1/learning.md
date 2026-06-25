@@ -339,7 +339,7 @@ Split **decide** from **execute**, and put a durable queue between them.
 ### Two things building it actually taught us
 
 - **BullMQ forbids `:` in a custom job id** (`Custom Id cannot contain :`). The first `jobId` was `monitorId:minuteBucket`; it threw at enqueue. Changed the separator to `_`. Only caught by *running* it — a reminder that static checks and "it imports fine" aren't verification.
-- **Claim and enqueue aren't atomic.** `claimDueMonitors` commits (advancing `next_check_at`) before `addBulk` runs. When the enqueue failed, the monitor had already been claimed — so it simply waited one interval before becoming due again. Delayed, never lost. Documented as an accepted limitation rather than papered over; the durable fix (a transactional outbox) is unjustified at this scale.
+- **Claim and enqueue aren't atomic.** `claimDueMonitors` commits (advancing `next_check_at`) before `addBulk` runs. When the enqueue failed, the monitor had already been claimed — so it simply waited one interval before becoming due again. Delayed, never lost. The durable fix (a transactional outbox) is a separate pattern not in the roadmap's forcing-requirement table — deliberately refused, not overlooked.
 
 ### Lessons worth keeping
 

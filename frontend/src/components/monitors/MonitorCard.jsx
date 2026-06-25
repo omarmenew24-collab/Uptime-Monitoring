@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Globe, Clock, Timer, AlertTriangle } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -30,12 +31,14 @@ function timeAgo(dateString) {
 }
 
 export default function MonitorCard({ monitor }) {
+  const navigate = useNavigate();
   const variant = !monitor.is_active ? 'paused' : (monitor.last_status || 'paused');
 
   return (
     <Card
+      onClick={() => navigate(`/monitors/${monitor.id}`)}
       className={cn(
-        'group relative border-l-[3px] p-5 transition-colors hover:bg-zinc-900/50',
+        'group relative border-l-[3px] p-5 transition-colors hover:bg-zinc-900/50 cursor-pointer',
         borderColors[variant]
       )}
     >

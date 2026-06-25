@@ -4,6 +4,7 @@ import AppShell from './components/layout/AppShell';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
 import DashboardPage from './pages/DashboardPage';
+import MonitorDetailPage from './pages/MonitorDetailPage';
 
 export default function App() {
   return (
@@ -16,6 +17,16 @@ export default function App() {
           <ProtectedRoute>
             <AppShell>
               <DashboardPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/monitors/:id"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <MonitorDetailPage />
             </AppShell>
           </ProtectedRoute>
         }

@@ -39,6 +39,33 @@ export const insertCheckLog = async (client, monitorId, checkResult, jobId) => {
   return result.rows[0] ?? null;
 };
 
+export const findChecksByMonitor = async (monitorId, limit, offset) => {
+  const result = await query(
+    `SELECT id, status, response_code, response_time_ms, message, checked_at
+     FROM check_logs
+     WHERE monitor_id = $1
+     ORDER BY checked_at DESC
+     LIMIT $2 OFFSET $3`,
+    [monitorId, limit, offset]
+  );
+  return result.rows;
+};
+
+export const getCheckStats = async (monitorId) => {
+  const result = await query(
+    `SELECT
+       COUNT(*)::int AS total_checks,
+       ROUND(AVG(response_time_ms))::int AS avg_response_ms,
+       COUNT(*) FILTER (WHERE status = 'up')::int AS up_count,
+       COUNT(*) FILTER (WHERE status = 'down')::int AS down_count,
+       COUNT(*) FILTER (WHERE status = 'timeout')::int AS timeout_count
+     FROM check_logs
+     WHERE monitor_id = $1`,
+    [monitorId]
+  );
+  return result.rows[0];
+};
+
 // Worker writes result state only — next_check_at is owned by the dispatcher.
 export const updateMonitorAfterCheck = async (client, monitorId, updates) => {
   const result = await client.query(
