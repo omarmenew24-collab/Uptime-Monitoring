@@ -69,6 +69,19 @@ export const updateMonitor = async (monitorId, userId, data) => {
   return result.rows[0] ?? null;
 };
 
+export const findPublicMonitorsByUserId = async (userId) => {
+  const result = await query(
+    `SELECT id, name, url, last_status, last_checked_at, is_active, interval_minutes
+     FROM monitors
+     WHERE user_id = $1
+       AND is_active = true
+       AND is_deleted = false
+     ORDER BY name ASC`,
+    [userId]
+  );
+  return result.rows;
+};
+
 export const findMonitorByIdAndUser = async (monitorId, userId) => {
   const result = await query(
     `SELECT ${SAFE_COLUMNS}, user_id, consecutive_failures, is_alerted

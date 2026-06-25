@@ -5,6 +5,7 @@ import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
 import DashboardPage from './pages/DashboardPage';
 import MonitorDetailPage from './pages/MonitorDetailPage';
+import StatusPage from './pages/StatusPage';
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/status/:userId" element={<StatusPage />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

@@ -7,6 +7,7 @@ import { requireAuth, syncUser } from './middleware/auth.js';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
 import monitorsRouter from './routes/monitors.routes.js';
 import metricsRouter from './routes/metrics.routes.js';
+import statusRouter from './routes/status.routes.js';
 import { query } from './config/db.js';
 import redis from './cache/redis.js';
 
@@ -34,6 +35,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 app.use('/api/metrics', metricsRouter);
+app.use('/api/status', statusRouter);
 
 app.use('/api/', apiRateLimiter);
 
