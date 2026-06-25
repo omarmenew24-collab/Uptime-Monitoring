@@ -6,6 +6,18 @@ import { checkQueue } from './queue/checkQueue.js';
 import { createCheckWorker } from './queue/checkWorker.js';
 import { dispatchDueChecks } from './queue/dispatcher.js';
 import { deleteExpiredCheckLogs } from './db/retention.queries.js';
+import { createPublisher, createSubscriber } from './events/eventBus.js';
+import { handleEmailEvent } from './events/consumers/emailConsumer.js';
+import { handleSlackEvent } from './events/consumers/slackConsumer.js';
+import { setEventPublisher } from './services/checks.service.js';
+
+const publisher = createPublisher();
+setEventPublisher(publisher.publish);
+
+const subscriber = createSubscriber(async (event) => {
+  await handleEmailEvent(event);
+  await handleSlackEvent(event);
+});
 
 const worker = createCheckWorker();
 
@@ -36,8 +48,10 @@ const shutdown = async () => {
   shuttingDown = true;
   dispatchTask.stop();
   retentionTask.stop();
-  await worker.close(); // stop taking jobs, let in-flight checks finish
+  await worker.close();
   await checkQueue.close();
+  await subscriber.close();
+  await publisher.close();
   await connection.quit();
   await pool.end();
   process.exit(0);

@@ -5,6 +5,12 @@ import { invalidateMonitorCache } from '../cache/monitorCache.js';
 
 const CHECK_TIMEOUT_MS = 5000;
 
+let publishEvent = null;
+
+export const setEventPublisher = (publishFn) => {
+  publishEvent = publishFn;
+};
+
 export const runCheck = async (url) => {
   const dnsCheck = await resolveAndValidate(url);
   if (!dnsCheck.safe) {
@@ -63,19 +69,19 @@ export const runCheck = async (url) => {
   }
 };
 
-// Called by the worker for one check job. `monitor` is the dispatch-time
-// snapshot from the job payload (camelCase fields); `jobId` is the stable
-// BullMQ id reused across retries. If the log insert hits the job_id conflict,
-// this delivery already ran — skip the state update so retries are idempotent.
 export const processCheck = async (monitor, jobId) => {
   const checkResult = await runCheck(monitor.url);
+  const previouslyAlerted = monitor.isAlerted;
+
+  let consecutiveFailures;
+  let isAlerted;
 
   await withTransaction(async (client) => {
     const inserted = await insertCheckLog(client, monitor.monitorId, checkResult, jobId);
     if (!inserted) return;
 
-    let consecutiveFailures = monitor.consecutiveFailures;
-    let isAlerted = monitor.isAlerted;
+    consecutiveFailures = monitor.consecutiveFailures;
+    isAlerted = monitor.isAlerted;
 
     if (checkResult.status === 'up') {
       consecutiveFailures = 0;
@@ -97,4 +103,30 @@ export const processCheck = async (monitor, jobId) => {
   });
 
   await invalidateMonitorCache(monitor.monitorId, monitor.userId);
+
+  if (publishEvent && consecutiveFailures !== undefined) {
+    if (!previouslyAlerted && isAlerted) {
+      await publishEvent({
+        type: 'monitor.down',
+        monitorId: monitor.monitorId,
+        userId: monitor.userId,
+        monitorName: monitor.monitorName,
+        url: monitor.url,
+        consecutiveFailures,
+        failureThreshold: monitor.failureThreshold,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (previouslyAlerted && !isAlerted) {
+      await publishEvent({
+        type: 'monitor.recovered',
+        monitorId: monitor.monitorId,
+        userId: monitor.userId,
+        monitorName: monitor.monitorName,
+        url: monitor.url,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
 };

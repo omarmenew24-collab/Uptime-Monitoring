@@ -3,6 +3,7 @@ export const schema = {
     id:            'uuid          PK   gen_random_uuid()',
     clerk_user_id: 'varchar       NOT NULL  UNIQUE',
     email:         'varchar       NOT NULL  UNIQUE',
+    slack_webhook_url: 'varchar   nullable',
     created_at:    'timestamptz   NOT NULL  default now()',
   },
 

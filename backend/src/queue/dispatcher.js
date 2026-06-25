@@ -19,6 +19,7 @@ export const dispatchDueChecks = async () => {
       data: {
         monitorId: monitor.id,
         userId: monitor.user_id,
+        monitorName: monitor.name,
         url: monitor.url,
         failureThreshold: monitor.failure_threshold,
         consecutiveFailures: monitor.consecutive_failures,
