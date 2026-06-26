@@ -8,6 +8,7 @@ import { apiRateLimiter } from './middleware/rateLimiter.js';
 import monitorsRouter from './routes/monitors.routes.js';
 import metricsRouter from './routes/metrics.routes.js';
 import statusRouter from './routes/status.routes.js';
+import usersRouter from './routes/users.routes.js';
 import { query } from './config/db.js';
 import redis from './cache/redis.js';
 
@@ -40,5 +41,6 @@ app.use('/api/status', statusRouter);
 app.use('/api/', apiRateLimiter);
 
 app.use('/api/monitors', requireAuth, syncUser, monitorsRouter);
+app.use('/api/settings', requireAuth, syncUser, usersRouter);
 
 export default app;

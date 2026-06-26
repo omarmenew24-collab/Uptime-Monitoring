@@ -6,6 +6,7 @@ import SignUpPage from './pages/SignUpPage';
 import DashboardPage from './pages/DashboardPage';
 import MonitorDetailPage from './pages/MonitorDetailPage';
 import StatusPage from './pages/StatusPage';
+import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -28,6 +29,16 @@ export default function App() {
           <ProtectedRoute>
             <AppShell>
               <MonitorDetailPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <SettingsPage />
             </AppShell>
           </ProtectedRoute>
         }

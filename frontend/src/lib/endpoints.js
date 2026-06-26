@@ -7,4 +7,5 @@ export const ENDPOINTS = {
   MONITOR_RESUME: (id) => `/api/monitors/${id}/resume`,
   MONITOR_DELETE: (id) => `/api/monitors/${id}`,
   PUBLIC_STATUS: (userId) => `/api/status/${userId}`,
+  SETTINGS: '/api/settings',
 };
