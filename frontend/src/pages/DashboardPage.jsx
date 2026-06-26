@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import Spinner from '@/components/ui/Spinner';
 import { useGetMonitors, useCreateMonitor } from '@/hooks/useMonitors';
 import useCreateMonitorForm from '@/hooks/useCreateMonitor';
 import MonitorList from '@/components/monitors/MonitorList';
@@ -21,7 +22,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (isLoading) return null;
+  if (isLoading) return <Spinner />;
 
   if (isError) {
     return (

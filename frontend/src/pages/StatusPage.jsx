@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { Activity } from 'lucide-react';
+import { Activity, Loader2 as Loader } from 'lucide-react';
 import { usePublicStatus } from '@/hooks/usePublicStatus';
 import { cn } from '@/lib/utils';
 
@@ -52,7 +52,7 @@ export default function StatusPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
-        <div className="text-zinc-500 text-sm">Loading status...</div>
+        <Loader className="h-6 w-6 animate-spin text-zinc-500" />
       </div>
     );
   }

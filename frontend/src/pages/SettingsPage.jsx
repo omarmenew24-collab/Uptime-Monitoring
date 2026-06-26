@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Spinner from '@/components/ui/Spinner';
 import { useGetSettings, useUpdateSettings } from '@/hooks/useSettings';
 
 export default function SettingsPage() {
@@ -19,7 +20,7 @@ export default function SettingsPage() {
     await updateSettings({ slackWebhookUrl: webhookUrl });
   };
 
-  if (isLoading) return null;
+  if (isLoading) return <Spinner />;
 
   return (
     <div className="max-w-xl">

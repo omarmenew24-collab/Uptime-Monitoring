@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMonitorDetail } from '@/hooks/useMonitorDetail';
 import { useCheckLogs, PAGE_SIZE } from '@/hooks/useCheckLogs';
+import Spinner from '@/components/ui/Spinner';
 import MonitorHeader from '@/components/monitors/MonitorHeader';
 import StatsRow from '@/components/monitors/StatsRow';
 import UptimeBar from '@/components/monitors/UptimeBar';
@@ -31,12 +32,15 @@ export default function MonitorDetailPage() {
 
   const hasMore = currentPage.length === PAGE_SIZE;
 
-  if (monitorLoading) return null;
+  if (monitorLoading) return <Spinner />;
 
   if (monitorError || !monitor) {
     return (
-      <div className="flex items-center justify-center min-h-96 text-zinc-500">
-        Monitor not found.
+      <div className="flex flex-col items-center justify-center min-h-96 gap-3">
+        <span className="text-zinc-500">Monitor not found.</span>
+        <a href="/dashboard" className="text-sm text-indigo-400 hover:text-indigo-300">
+          Back to dashboard
+        </a>
       </div>
     );
   }
