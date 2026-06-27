@@ -16,6 +16,18 @@ Read them in this order — each builds on the one before.
 
 4. **[04-url-safety-ssrf.md](04-url-safety-ssrf.md)** — The security layer that stops our server being tricked into fetching internal/private addresses. Pure security thinking: defense in depth, allow-listing, failing closed.
 
+5. **[05-pubsub-vs-durable-queue.md](05-pubsub-vs-durable-queue.md)** — Why we replaced fire-and-forget pub/sub with a durable BullMQ queue for notifications. The most important architecture decision: what happens when a consumer isn't listening?
+
+6. **[06-cache.md](06-cache.md)** — Cache-aside pattern with Redis. How reads skip the database, how writes invalidate the cache, why TTL is a safety net not a strategy, and why cache failures must be non-fatal.
+
+7. **[07-rollups-retention.md](07-rollups-retention.md)** — Pre-aggregating raw check logs into daily summaries so charts read 30 rows instead of 8,640. Tiered retention: keep raw data 30 days, keep rollups forever.
+
+8. **[08-rate-limiting.md](08-rate-limiting.md)** — Three layers of protection: per-user API rate limits, per-domain concurrency limits (counting semaphore), and per-user monitor quotas. Why each layer exists and what it protects.
+
+9. **[09-queue-worker.md](09-queue-worker.md)** — Extracting checks from the API process into a separate worker via BullMQ. Producer/consumer split, work claiming with FOR UPDATE SKIP LOCKED, idempotent processing.
+
+10. **[10-observability.md](10-observability.md)** — Health checks vs metrics. Lag detection (the most important number). Reading queue depth, failed jobs, and connection status to diagnose problems before users notice.
+
 ## Each file has the same shape
 
 - **What it does** — the feature in one breath
@@ -27,6 +39,6 @@ Read them in this order — each builds on the one before.
 
 ## Related
 
-- **`../../codefilesexplanination/`** — line-by-line annotated copies of individual tricky files (e.g. `useCreateMonitor`).
+- **`../../CORE-SYSTEM-DESIGN-LESSONS.md`** — The 7 most important patterns, condensed.
+- **`../../SYSTEM-DESIGN-DEEP-DIVE.md`** — All 32 concepts in the codebase, with code.
 - **`../learning.md`** — real bugs found during the build, with bad-code / good-code before-and-after.
-- **`../architecture-visual.md`** — system diagrams at four zoom levels.
