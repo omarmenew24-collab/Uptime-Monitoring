@@ -9,9 +9,10 @@ export const apiRateLimiter = rateLimit({
   max: MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || 'anonymous',
   store: new RedisStore({
     sendCommand: (...args) => redis.call(...args),
   }),
   message: { error: `Rate limit exceeded. Max ${MAX_REQUESTS} requests per minute.` },
+  skip: (req) => !redis.isReady || !req.user?.id,
 });
