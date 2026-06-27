@@ -5,31 +5,39 @@ change.
 
 ## Current Phase
 
-- Not started
+- **Phase 5 COMPLETE** — All system-design and product features built
 
 ## Current Goal
 
-- Basic project skeleton — backend, database schema, frontend shell
+- Verify all features work end-to-end in the browser
 
 ## Completed
 
-- None yet.
+**System Design Phases:**
+- ✅ Phase 0 — In-process cron baseline
+- ✅ Phase 1 — Worker pool + durable queue (BullMQ/Redis, idempotent jobs, retries)
+- ✅ Phase 2 — Cache (Redis cache-aside, 60s/120s TTL, invalidation)
+- ✅ Phase 3 — Event-driven alerting (durable notification queue, email + Slack)
+- ✅ Phase 4 — Time-series rollups + tiered retention (raw 30d, rollups indefinite)
+- ✅ Phase 5 — Observability + backpressure (metrics, rate limiting, quotas)
+
+**Product Features (Specs 01–20):**
+- ✅ Specs 01–08 — Core MVP (auth, CRUD, checks, dashboard)
+- ✅ Spec 09 — Check history pagination
+- ✅ Spec 10 — Pause/resume/delete monitors
+- ✅ Spec 11 — Edit monitor
+- ✅ Spec 12–13 — Event-driven notifications (email + Slack channels)
+- ✅ Spec 14 — Time-series rollups + retention
+- ✅ Spec 15 — Rate limiting + quotas
+- ✅ Spec 16 — Uptime bar + response time chart
+- ✅ Spec 17 — Monitor detail page with history
+- ✅ Spec 18 — Public status page (no auth, cached)
+- ✅ Spec 19 — Notification settings (Slack webhook URL)
+- ✅ Spec 20 — Loading/error states (spinners, friendly messages)
 
 ## In Progress
 
-- None yet.
-
-## Next Up
-
-The MVP feature specs (01–08) are the Phase 0 baseline. The system-design
-phases in `system-design-roadmap.md` build on top of them, in order — each
-justified by a forcing requirement, each gated by "the previous phase is done":
-
-- Phase 1 ✅ — extract worker + durable queue (BullMQ/Redis); idempotent jobs; retries/backoff/DLQ
-- Phase 2 — cache the read path (dashboard + status page)
-- Phase 3 — event-driven alerting fan-out (email + Slack)
-- Phase 4 — time-series rollups + tiered retention
-- Phase 5 — observability + backpressure
+- End-to-end testing in browser (all systems running: Postgres, Redis, backend, frontend)
 
 ## Open Questions
 
@@ -60,4 +68,5 @@ justified by a forcing requirement, each gated by "the previous phase is done":
 
 ## Session Notes
 
-- [Context needed to resume work in the next session]
+- **2026-06-27 — Redis installation + rate limiter fix.** Redis was not installed on Windows, causing the backend to fail on startup. Fixed rate limiter to skip IP-based limiting when Redis is down (only rate-limit authenticated users). Downloaded and installed Redis 3.2.100 for Windows. All three systems (Postgres, Redis, Clerk) now report healthy. See `REDIS-SETUP.md` for full explanation.
+- **All features implemented.** Every spec (01–20) and every phase (0–5) is code-complete and pushed to `phase1` branch. Ready for browser testing and merge to `main`.
