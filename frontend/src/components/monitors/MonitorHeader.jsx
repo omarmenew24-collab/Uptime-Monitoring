@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import StatusBadge from './StatusBadge';
 import EditMonitorDialog from './EditMonitorDialog';
+import CheckNowButton from './CheckNowButton';
 import { usePauseMonitor, useResumeMonitor, useDeleteMonitor } from '@/hooks/useMonitors';
 
 function formatDate(dateString) {
@@ -73,6 +74,7 @@ export default function MonitorHeader({ monitor }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <CheckNowButton monitorId={monitor.id} />
             <Button
               variant="outline"
               size="sm"

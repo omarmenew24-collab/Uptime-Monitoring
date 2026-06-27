@@ -138,3 +138,21 @@ export const processCheck = async (monitor, jobId) => {
     }
   }
 };
+
+export const checkNow = async (monitor) => {
+  const jobId = `${monitor.id}:manual:${Date.now()}`;
+  await processCheck(monitor, jobId);
+
+  // Fetch and return the latest check result
+  const { query } = await import('../config/db.js');
+  const result = await query(
+    'SELECT id, status, response_code, response_time_ms, checked_at FROM check_logs WHERE monitor_id = $1 AND job_id = $2',
+    [monitor.id, jobId]
+  );
+
+  if (!result.rows[0]) {
+    throw new Error('Check executed but result not found');
+  }
+
+  return result.rows[0];
+};

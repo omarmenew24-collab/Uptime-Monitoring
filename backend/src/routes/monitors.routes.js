@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createMonitorSchema, updateMonitorSchema } from '../schemas/monitors.schema.js';
 import * as monitorsService from '../services/monitors.service.js';
+import { checkNow } from '../services/checks.service.js';
 
 const router = Router();
 
@@ -115,6 +116,21 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('Delete monitor error:', err);
     return res.status(500).json({ error: 'Failed to delete monitor' });
+  }
+});
+
+router.post('/:id/check-now', async (req, res) => {
+  try {
+    const monitor = await monitorsService.getMonitorDetail(req.params.id, req.user.id);
+    if (!monitor) {
+      return res.status(404).json({ error: 'Monitor not found' });
+    }
+
+    const check = await checkNow(monitor);
+    return res.status(200).json({ data: check });
+  } catch (err) {
+    console.error('Check now error:', err);
+    return res.status(500).json({ error: 'Failed to execute check' });
   }
 });
 
