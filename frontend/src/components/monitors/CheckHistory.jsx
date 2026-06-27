@@ -16,8 +16,12 @@ function timeAgo(dateString) {
 export default function CheckHistory({ checks, hasMore, onLoadMore, isLoading }) {
   return (
     <Card className="overflow-hidden">
-      <div className="px-5 py-3 border-b border-zinc-800">
+      <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-zinc-300">Check History</h2>
+        <span className="text-xs text-zinc-500">
+          Showing {checks.length} check{checks.length !== 1 ? 's' : ''}
+          {hasMore && ' (scroll to load more)'}
+        </span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -57,13 +61,13 @@ export default function CheckHistory({ checks, hasMore, onLoadMore, isLoading })
         </table>
       </div>
       {hasMore && (
-        <div className="px-5 py-3 border-t border-zinc-800">
+        <div className="px-5 py-3 border-t border-zinc-800 flex items-center justify-center">
           <button
             onClick={onLoadMore}
             disabled={isLoading}
-            className="w-full py-2 text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 hover:bg-zinc-800/50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Loading...' : 'Load more'}
+            {isLoading ? '⟳ Loading more...' : '↓ Load earlier checks'}
           </button>
         </div>
       )}

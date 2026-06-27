@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/clerk-react';
 import api from '@/lib/axios';
 import { ENDPOINTS } from '@/lib/endpoints';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 export const useCheckLogs = (monitorId, page = 0) => {
   const { getToken } = useAuth();
