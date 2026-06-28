@@ -140,29 +140,20 @@ export const processCheck = async (monitor, jobId) => {
 };
 
 export const checkNow = async (monitor) => {
-  const jobId = `${monitor.id}_manual_${Date.now()}`;
-
-  const checkData = {
-    monitorId: monitor.id,
-    userId: monitor.user_id,
-    monitorName: monitor.name,
-    url: monitor.url,
-    failureThreshold: monitor.failure_threshold,
-    consecutiveFailures: monitor.consecutive_failures,
-    isAlerted: monitor.is_alerted,
-  };
-
-  await processCheck(checkData, jobId);
+  const result = await runCheck(monitor.url);
 
   const { query } = await import('../config/db.js');
-  const result = await query(
-    'SELECT id, status, response_code, response_time_ms, checked_at FROM check_logs WHERE monitor_id = $1 AND job_id = $2',
-    [monitor.id, jobId]
+  const jobId = `${monitor.id}_manual_${Date.now()}`;
+
+  const row = await query(
+    `INSERT INTO check_logs (monitor_id, status, response_code, response_time_ms, message, job_id, checked_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (job_id) DO NOTHING
+     RETURNING id, status, response_code, response_time_ms, checked_at`,
+    [monitor.id, result.status, result.responseCode, result.responseTimeMs, result.message, jobId]
   );
 
-  if (!result.rows[0]) {
-    throw new Error('Check executed but result not found');
-  }
+  await invalidateMonitorCache(monitor.id, monitor.user_id);
 
-  return result.rows[0];
+  return row.rows[0] || { status: result.status, response_code: result.responseCode, response_time_ms: result.responseTimeMs, checked_at: new Date().toISOString() };
 };
