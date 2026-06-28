@@ -1,8 +1,54 @@
 import 'dotenv/config';
 import app from './app.js';
+import cron from 'node-cron';
+import pool from './config/db.js';
+import { connection } from './queue/connection.js';
+import { checkQueue } from './queue/checkQueue.js';
+import { notificationQueue } from './queue/notificationQueue.js';
+import { createCheckWorker } from './queue/checkWorker.js';
+import { createNotificationWorker } from './queue/notificationWorker.js';
+import { dispatchDueChecks } from './queue/dispatcher.js';
+import { deleteExpiredCheckLogs } from './db/retention.queries.js';
+import { runRollupJob } from './jobs/rollupJob.js';
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+const checkWorker = createCheckWorker();
+const notificationWorker = createNotificationWorker();
+
+checkWorker.on('failed', (job, err) => {
+  console.error(`Check job ${job?.id} failed:`, err.message);
+});
+
+notificationWorker.on('failed', (job, err) => {
+  console.error(`Notification job ${job?.id} failed (attempt ${job?.attemptsMade}):`, err.message);
+});
+
+cron.schedule('* * * * *', async () => {
+  try { await dispatchDueChecks(); } catch (err) { console.error('Dispatcher error:', err); }
+});
+
+cron.schedule('5 * * * *', async () => {
+  try { await runRollupJob(); } catch (err) { console.error('Rollup error:', err); }
+});
+
+cron.schedule('0 3 * * *', async () => {
+  try { await deleteExpiredCheckLogs(); } catch (err) { console.error('Retention error:', err); }
+});
+
+const shutdown = async () => {
+  await checkWorker.close();
+  await notificationWorker.close();
+  await checkQueue.close();
+  await notificationQueue.close();
+  await connection.quit();
+  await pool.end();
+  process.exit(0);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
