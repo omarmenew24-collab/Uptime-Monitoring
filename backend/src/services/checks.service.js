@@ -140,10 +140,20 @@ export const processCheck = async (monitor, jobId) => {
 };
 
 export const checkNow = async (monitor) => {
-  const jobId = `${monitor.id}:manual:${Date.now()}`;
-  await processCheck(monitor, jobId);
+  const jobId = `${monitor.id}_manual_${Date.now()}`;
 
-  // Fetch and return the latest check result
+  const checkData = {
+    monitorId: monitor.id,
+    userId: monitor.user_id,
+    monitorName: monitor.name,
+    url: monitor.url,
+    failureThreshold: monitor.failure_threshold,
+    consecutiveFailures: monitor.consecutive_failures,
+    isAlerted: monitor.is_alerted,
+  };
+
+  await processCheck(checkData, jobId);
+
   const { query } = await import('../config/db.js');
   const result = await query(
     'SELECT id, status, response_code, response_time_ms, checked_at FROM check_logs WHERE monitor_id = $1 AND job_id = $2',
