@@ -15,7 +15,13 @@ import redis from './cache/redis.js';
 const app = express();
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://uptime-monitoring-eight.vercel.app',
+    'http://localhost:5173',
+  ],
+  credentials: true,
+}));
 app.use(clerkMiddleware());
 
 app.post('/api/webhooks/clerk', express.raw({ type: 'application/json' }), handleClerkWebhook);
