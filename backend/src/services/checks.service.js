@@ -5,7 +5,7 @@ import { invalidateMonitorCache } from '../cache/monitorCache.js';
 import { notificationQueue } from '../queue/notificationQueue.js';
 import { acquireDomainSlot, releaseDomainSlot } from '../middleware/domainLimiter.js';
 
-const CHECK_TIMEOUT_MS = 5000;
+const CHECK_TIMEOUT_MS = 10000;
 
 export const runCheck = async (url) => {
   const dnsCheck = await resolveAndValidate(url);
