@@ -28,6 +28,8 @@ app.post('/api/webhooks/clerk', express.raw({ type: 'application/json' }), handl
 
 app.use(express.json());
 
+app.get('/api/ping', (req, res) => res.send('ok'));
+
 app.get('/api/health', async (req, res) => {
   let redisOk = false;
   let pgOk = false;
